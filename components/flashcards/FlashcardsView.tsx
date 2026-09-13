@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 
 import Icon from "@/components/ui/Icon";
@@ -13,50 +12,9 @@ type FlashcardDeck = {
   status?: "new" | "strong" | "normal";
 };
 
-const decks: FlashcardDeck[] = [
-  {
-    title: "Cell Biology — Ch. 3",
-    description: "12 cards • reviewed today",
-    mastery: 78,
-    tag: "BIO 101",
-    status: "normal",
-  },
-  {
-    title: "CS101 Syllabus Terms",
-    description: "8 cards • reviewed 5d ago",
-    mastery: 62,
-    tag: "Due today",
-    status: "normal",
-  },
-  {
-    title: "Midterm Reviewer",
-    description: "15 cards • never reviewed",
-    mastery: 0,
-    tag: "NEW",
-    status: "new",
-  },
-  {
-    title: "Chapter 5 Notes",
-    description: "9 cards • reviewed 1w ago",
-    mastery: 60,
-    tag: "CHEM 102",
-    status: "normal",
-  },
-  {
-    title: "Mitosis Deep Dive",
-    description: "6 cards • reviewed yesterday",
-    mastery: 92,
-    tag: "Strong Recall",
-    status: "strong",
-  },
-  {
-    title: "Data Structures Basics",
-    description: "4 cards • reviewed 3d ago",
-    mastery: 75,
-    tag: "CS 201",
-    status: "normal",
-  },
-];
+// Real flashcard decks will be loaded from the backend.
+// No demo/fake decks.
+const decks: FlashcardDeck[] = [];
 
 function getTopBarClass(deck: FlashcardDeck) {
   if (deck.status === "new") {
@@ -86,12 +44,20 @@ function getMasteryLabel(deck: FlashcardDeck) {
   return `${deck.mastery}% Mastery`;
 }
 
-function getMasteryCount(deck: FlashcardDeck) {
-  if (deck.status === "new") {
-    return "0/15 known";
-  }
+function getCardCount(deck: FlashcardDeck) {
+  const match = deck.description.match(
+    /(\d+)\s+cards/
+  );
 
-  const cardCount = Number(deck.description.split(" ")[0]);
+  return match ? Number(match[1]) : 0;
+}
+
+function getMasteryCount(deck: FlashcardDeck) {
+  const cardCount = getCardCount(deck);
+
+  if (deck.status === "new") {
+    return `0/${cardCount} known`;
+  }
 
   const mastered = Math.round(
     (deck.mastery / 100) * cardCount
@@ -100,9 +66,7 @@ function getMasteryCount(deck: FlashcardDeck) {
   return `${mastered}/${cardCount} mastered`;
 }
 
-function getBottomLabel(
-  deck: FlashcardDeck
-) {
+function getBottomLabel(deck: FlashcardDeck) {
   if (deck.status === "new") {
     return "Ready to start";
   }
@@ -162,9 +126,7 @@ function FlashcardCard({
             </span>
 
             <span className="text-[#2d6a1b]">
-              {deck.status === "new"
-                ? "0/15 known"
-                : `${deck.mastery}%`}
+              {getMasteryCount(deck)}
             </span>
           </div>
 
@@ -185,8 +147,8 @@ function FlashcardCard({
           {getBottomLabel(deck)}
         </span>
 
-        <Link
-          href="/flashcards/cell-biology"
+        <button
+          type="button"
           className={`rounded-xl px-4 py-2 text-sm font-semibold ${getButtonClass(
             deck
           )}`}
@@ -195,7 +157,7 @@ function FlashcardCard({
           {deck.status === "new"
             ? "Start First Session"
             : "Review"}
-        </Link>
+        </button>
       </div>
     </article>
   );
@@ -238,11 +200,15 @@ export default function FlashcardsView() {
         .includes(searchQuery.toLowerCase())
   );
 
+  const totalCards = decks.reduce(
+    (total, deck) =>
+      total + getCardCount(deck),
+    0
+  );
+
   return (
     <>
-      {/* =========================================
-          PAGE HEADER
-      ========================================== */}
+      {/* Page Header */}
       <div className="flex flex-col justify-between gap-4 sm:flex-row">
         <div>
           <div className="text-[11px] font-bold uppercase tracking-wider text-[#2d6a1b]">
@@ -267,9 +233,7 @@ export default function FlashcardsView() {
         </button>
       </div>
 
-      {/* =========================================
-          SEARCH / FILTER BAR
-      ========================================== */}
+      {/* Search / Filter Bar */}
       <div className="mt-7 flex flex-col gap-3 rounded-xl bg-[#f0eee8] p-4 sm:flex-row">
         <SearchBar
           value={searchQuery}
@@ -281,40 +245,47 @@ export default function FlashcardsView() {
         </select>
 
         <span className="rounded-full bg-white px-3 py-2 text-sm font-semibold text-[#2d6a1b]">
-          44 cards due this week
+          {totalCards} cards
         </span>
       </div>
 
-      {/* =========================================
-          FLASHCARD DECKS
-      ========================================== */}
-      <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {filteredDecks.map((deck) => (
-          <FlashcardCard
-            key={deck.title}
-            deck={deck}
-          />
-        ))}
-      </div>
+      {/* Flashcard Decks */}
+      {filteredDecks.length > 0 && (
+        <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {filteredDecks.map((deck) => (
+            <FlashcardCard
+              key={deck.title}
+              deck={deck}
+            />
+          ))}
+        </div>
+      )}
 
-      {/* Empty search state */}
+      {/* Empty State */}
       {filteredDecks.length === 0 && (
         <div className="mt-6 rounded-2xl bg-white p-10 text-center shadow-sm">
-          <h2 className="font-semibold">
-            No flashcard decks found
+          <div className="mx-auto grid size-12 place-items-center rounded-xl bg-[#f0eee8] text-[#2d6a1b]">
+            <Icon
+              name="card"
+              className="size-6"
+            />
+          </div>
+
+          <h2 className="mt-4 font-semibold">
+            No flashcard decks yet
           </h2>
 
-          <p className="mt-1 text-sm text-[#41493c]">
-            Try a different search term.
+          <p className="mx-auto mt-1 max-w-md text-sm text-[#41493c]">
+            Upload course material first. StudyMate
+            AI will generate flashcards from your
+            uploaded materials.
           </p>
         </div>
       )}
 
-      {/* =========================================
-          BOTTOM INFORMATION
-      ========================================== */}
+      {/* Bottom Information */}
       <div className="mt-8 grid gap-5 lg:grid-cols-3">
-        {/* Sync information */}
+        {/* Sync Information */}
         <div className="rounded-2xl bg-[#f0eee8] p-5 lg:col-span-2">
           <b className="text-[#356b10]">
             ⌁ Sync Active
@@ -327,12 +298,12 @@ export default function FlashcardsView() {
 
           <p className="mt-1 text-sm text-[#41493c]">
             StudyMate AI continuously aligns
-            questions with syllabus updates and
-            lecture recording transcripts.
+            questions with your uploaded study
+            materials.
           </p>
         </div>
 
-        {/* Weekly goal */}
+        {/* Weekly Goal */}
         <div className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-sm">
           <span className="grid size-16 place-items-center rounded-full border-4 border-[#2d6a1b] font-bold text-[#2d6a1b]">
             82%
@@ -342,7 +313,7 @@ export default function FlashcardsView() {
             <b>Weekly Goal Progress</b>
 
             <p className="text-sm text-[#41493c]">
-              44 / 54 cards retained
+              No cards retained yet
             </p>
           </div>
         </div>

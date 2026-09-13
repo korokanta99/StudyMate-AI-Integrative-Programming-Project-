@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { signUp } from "aws-amplify/auth";
 import { useMockAuth } from "./MockAuth";
 
 type AuthFormProps = {
@@ -17,6 +18,7 @@ export default function AuthForm({
   const { signIn } = useMockAuth();
 
   const [name, setName] = useState("Candice Berdin");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -25,20 +27,30 @@ export default function AuthForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
     setError("");
 
-    // Password validation
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
       return;
     }
 
-    // Signup validation
     if (signup && !name.trim()) {
       setError("Please enter your full name.");
+      return;
+    }
+
+    if (signup && !username.trim()) {
+      setError("Please choose a username.");
+      return;
+    }
+
+    if (signup && !email.trim()) {
+      setError("Please enter your email.");
       return;
     }
 
@@ -49,12 +61,72 @@ export default function AuthForm({
 
     setLoading(true);
 
-    // Mock authentication for now.
-    // This will eventually be replaced with AWS Cognito.
-    setTimeout(() => {
-      signIn();
+    try {
+      if (signup) {
+        const result = await signUp({
+          username: username.trim(),
+          password,
+          options: {
+            userAttributes: {
+              email: email.trim(),
+              name: name.trim(),
+            },
+          },
+        });
+
+        if (
+          result.nextStep.signUpStep ===
+          "CONFIRM_SIGN_UP"
+        ) {
+          sessionStorage.setItem(
+            "studymate-signup-username",
+            username.trim()
+          );
+
+          router.push("/verify-email");
+          return;
+        }
+
+        router.push("/login");
+        return;
+      }
+
+      await signIn(email.trim(), password);
+
       router.push("/dashboard");
-    }, 400);
+    } catch (err) {
+      console.error(err);
+
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again.";
+
+      if (
+        message.includes("User already exists") ||
+        message.includes("UsernameExistsException")
+      ) {
+        setError(
+          "An account with this username or email already exists."
+        );
+      } else if (
+        message.includes("Incorrect username or password")
+      ) {
+        setError("Incorrect username or password.");
+      } else if (
+        message.includes("UserNotFoundException")
+      ) {
+        setError("Account not found.");
+      } else if (
+        message.includes("NotAuthorizedException")
+      ) {
+        setError("Incorrect username or password.");
+      } else {
+        setError(message);
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -63,9 +135,7 @@ export default function AuthForm({
         onSubmit={submit}
         className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-xl"
       >
-        {/* =========================================
-            BRANDING
-        ========================================== */}
+        {/* Branding */}
         <div className="text-3xl font-bold text-[#2d6a1b]">
           StudyMate{" "}
           <small className="rounded-full bg-[#468432] px-2 py-1 text-xs text-white">
@@ -77,9 +147,7 @@ export default function AuthForm({
           AI-powered study assistant & active recall
         </p>
 
-        {/* =========================================
-            LOGIN / SIGNUP TABS
-        ========================================== */}
+        {/* Login / Signup tabs */}
         <div className="mt-6 flex rounded-xl bg-[#f0eee8] p-1">
           <Link
             href="/login"
@@ -104,11 +172,9 @@ export default function AuthForm({
           </Link>
         </div>
 
-        {/* =========================================
-            FORM FIELDS
-        ========================================== */}
+        {/* Form fields */}
         <div className="mt-6 space-y-4 text-left">
-          {/* Full name — signup only */}
+          {/* Full name */}
           {signup && (
             <label className="block text-sm font-semibold">
               Full name
@@ -125,19 +191,43 @@ export default function AuthForm({
             </label>
           )}
 
+          {/* Username */}
+          {signup && (
+            <label className="block text-sm font-semibold">
+              Username
+
+              <input
+                required
+                value={username}
+                onChange={(event) =>
+                  setUsername(event.target.value)
+                }
+                placeholder="Choose a username"
+                autoComplete="username"
+                className="mt-2 w-full rounded-xl bg-[#f5f3ee] p-3 font-normal outline-none focus:ring-2 focus:ring-[#468432]"
+              />
+            </label>
+          )}
+
           {/* Email */}
           <label className="block text-sm font-semibold">
-            Email
+            {signup ? "Email" : "Email or username"}
 
             <input
               required
-              type="email"
+              type={signup ? "email" : "text"}
               value={email}
               onChange={(event) =>
                 setEmail(event.target.value)
               }
-              placeholder="candiceberdin@gmail.com"
-              autoComplete="email"
+              placeholder={
+                signup
+                  ? "candiceberdin@gmail.com"
+                  : "Email or username"
+              }
+              autoComplete={
+                signup ? "email" : "username"
+              }
               className="mt-2 w-full rounded-xl bg-[#f5f3ee] p-3 font-normal outline-none focus:ring-2 focus:ring-[#468432]"
             />
           </label>
@@ -164,7 +254,9 @@ export default function AuthForm({
                 }
                 type={showPassword ? "text" : "password"}
                 autoComplete={
-                  signup ? "new-password" : "current-password"
+                  signup
+                    ? "new-password"
+                    : "current-password"
                 }
                 className="w-full rounded-xl bg-[#f5f3ee] p-3 pr-16 font-normal outline-none focus:ring-2 focus:ring-[#468432]"
               />
@@ -181,7 +273,7 @@ export default function AuthForm({
             </span>
           </label>
 
-          {/* Confirm password — signup only */}
+          {/* Confirm password */}
           {signup && (
             <label className="block text-sm font-semibold">
               Confirm password
@@ -201,7 +293,7 @@ export default function AuthForm({
             </label>
           )}
 
-          {/* Remember me — login only */}
+          {/* Remember me */}
           {!signup && (
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -237,9 +329,7 @@ export default function AuthForm({
           </button>
         </div>
 
-        {/* =========================================
-            SWITCH AUTH MODE
-        ========================================== */}
+        {/* Switch auth mode */}
         <p className="mt-5 text-sm">
           {signup
             ? "Already have an account?"

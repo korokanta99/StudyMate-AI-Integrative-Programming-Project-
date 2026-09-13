@@ -1,164 +1,182 @@
 "use client";
 
 import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
+  fetchAuthSession,
+  fetchUserAttributes,
+  getCurrentUser,
+  signIn as cognitoSignIn,
+  signOut as cognitoSignOut,
+} from "aws-amplify/auth";
+import { createContext, useContext, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import "./amplify-config";
 
-type SubscriptionStatus =
-  | "free"
-  | "trial"
-  | "trial_cancelled"
-  | "premium_monthly"
-  | "premium_yearly";
-
-type State = {
+type AuthState = {
   loggedIn: boolean;
+  loading: boolean;
   pro: boolean;
   name: string;
   email: string;
+  username: string;
   studentInfo: string;
-
-  subscriptionStatus: SubscriptionStatus;
-
+  signIn: (identifier: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
   updateProfile: (name: string, studentInfo: string) => void;
-  signIn: () => void;
-  signOut: () => void;
-
-  startTrial: (plan: "monthly" | "yearly") => void;
-  cancelTrial: () => void;
-  activatePro: (plan: "monthly" | "yearly") => void;
+  activatePro: () => void;
 };
 
-const C = createContext<State | null>(null);
+const AuthContext = createContext<AuthState | null>(null);
 
 export function MockAuthProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [ready, setReady] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
-
-  const [subscriptionStatus, setSubscriptionStatus] =
-    useState<SubscriptionStatus>("free");
+  const [loading, setLoading] = useState(true);
+  const [pro, setPro] = useState(false);
 
   const [name, setName] = useState("Alex Student");
+  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [studentInfo, setStudentInfo] = useState(
     "Biology · Class of 2027"
   );
 
   useEffect(() => {
-    setLoggedIn(localStorage.getItem("studymate-auth") === "yes");
+    async function loadUser() {
+      try {
+        const user = await getCurrentUser();
+        const attributes = await fetchUserAttributes();
 
-    const savedSubscription =
-      localStorage.getItem(
-        "studymate-subscription"
-      ) as SubscriptionStatus | null;
-
-    if (savedSubscription) {
-      setSubscriptionStatus(savedSubscription);
+        setLoggedIn(true);
+        setUsername(user.username);
+        setEmail(attributes.email ?? "");
+        setName(attributes.name ?? "Alex Student");
+      } catch {
+        setLoggedIn(false);
+      } finally {
+        setLoading(false);
+      }
     }
 
-    setReady(true);
+    loadUser();
   }, []);
 
-  const pro =
-    subscriptionStatus === "trial" ||
-    subscriptionStatus === "trial_cancelled" ||
-    subscriptionStatus === "premium_monthly" ||
-    subscriptionStatus === "premium_yearly";
+  async function signIn(identifier: string, password: string) {
+    const result = await cognitoSignIn({
+      username: identifier,
+      password,
+    });
 
-  const state: State = {
-    loggedIn,
-    pro,
+    if (result.isSignedIn) {
+      const user = await getCurrentUser();
+      const attributes = await fetchUserAttributes();
 
-    name,
-    email: "alex.student@example.com",
-    studentInfo,
-
-    subscriptionStatus,
-
-    updateProfile: (
-      nextName: string,
-      nextInfo: string
-    ) => {
-      setName(nextName);
-      setStudentInfo(nextInfo);
-    },
-
-    signIn: () => {
-      localStorage.setItem("studymate-auth", "yes");
       setLoggedIn(true);
-    },
+      setUsername(user.username);
+      setEmail(attributes.email ?? "");
+      setName(attributes.name ?? "Alex Student");
+    }
+  }
 
-    signOut: () => {
-      localStorage.removeItem("studymate-auth");
-      setLoggedIn(false);
-    },
+  async function signOut() {
+    await cognitoSignOut();
 
-    startTrial: (
-      plan: "monthly" | "yearly"
-    ) => {
-      // The selected paid plan is remembered for the
-      // subscription flow, but the user pays ₱0 during trial.
-      localStorage.setItem(
-        "studymate-trial-plan",
-        plan
+    setLoggedIn(false);
+    setUsername("");
+    setEmail("");
+  }
+
+  function updateProfile(
+    nextName: string,
+    nextStudentInfo: string
+  ) {
+    setName(nextName);
+    setStudentInfo(nextStudentInfo);
+  }
+
+  function activatePro() {
+    setPro(true);
+  }
+
+  async function testStudyMateApi() {
+    try {
+      const session = await fetchAuthSession();
+
+      const token = session.tokens?.idToken?.toString();
+
+      if (!token) {
+        console.error("No Cognito ID token found.");
+        return;
+      }
+
+      const response = await fetch(
+        "https://8auzzcojhh.execute-api.ap-southeast-1.amazonaws.com/materials/upload-url",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            fileName: "test-lecture.pdf",
+            contentType: "application/pdf",
+          }),
+        }
       );
 
-      localStorage.setItem(
-        "studymate-subscription",
-        "trial"
+      const data = await response.json();
+
+      console.log("StudyMate upload URL response:", {
+        status: response.status,
+        data,
+      });
+    } catch (error) {
+      console.error(
+        "StudyMate upload URL test failed:",
+        error
       );
+    }
+  }
 
-      setSubscriptionStatus("trial");
-    },
+  if (typeof window !== "undefined") {
+    (
+      window as Window & {
+        testStudyMateApi?: () => Promise<void>;
+      }
+    ).testStudyMateApi = testStudyMateApi;
+  }
 
-    cancelTrial: () => {
-      localStorage.setItem(
-        "studymate-subscription",
-        "trial_cancelled"
-      );
-
-      setSubscriptionStatus("trial_cancelled");
-    },
-
-    activatePro: (
-      plan: "monthly" | "yearly"
-    ) => {
-      const status =
-        plan === "monthly"
-          ? "premium_monthly"
-          : "premium_yearly";
-
-      localStorage.setItem(
-        "studymate-subscription",
-        status
-      );
-
-      setSubscriptionStatus(status);
-    },
+  const state: AuthState = {
+    loggedIn,
+    loading,
+    pro,
+    name,
+    email,
+    username,
+    studentInfo,
+    signIn,
+    signOut,
+    updateProfile,
+    activatePro,
   };
 
   return (
-    <C.Provider value={state}>
-      {ready ? children : null}
-    </C.Provider>
+    <AuthContext.Provider value={state}>
+      {children}
+    </AuthContext.Provider>
   );
 }
 
 export function useMockAuth() {
-  const v = useContext(C);
+  const context = useContext(AuthContext);
 
-  if (!v) {
-    throw Error("MockAuthProvider is required");
+  if (!context) {
+    throw new Error("MockAuthProvider is required");
   }
 
-  return v;
+  return context;
 }
 
 export function AuthGate({
@@ -166,17 +184,21 @@ export function AuthGate({
 }: {
   children: React.ReactNode;
 }) {
-  const { loggedIn } = useMockAuth();
-  const r = useRouter();
-  const p = usePathname();
+  const { loggedIn, loading } = useMockAuth();
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    if (!loggedIn) {
-      r.replace(
-        `/login?next=${encodeURIComponent(p)}`
+    if (!loading && !loggedIn) {
+      router.replace(
+        `/login?next=${encodeURIComponent(pathname)}`
       );
     }
-  }, [loggedIn, p, r]);
+  }, [loading, loggedIn, pathname, router]);
 
-  return loggedIn ? <>{children}</> : null;
+  if (loading || !loggedIn) {
+    return null;
+  }
+
+  return <>{children}</>;
 }
