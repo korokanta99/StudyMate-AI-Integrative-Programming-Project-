@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 
+import { useRouter } from "next/navigation";
 import { fetchAuthSession } from "aws-amplify/auth";
 
 const API_BASE =
@@ -204,6 +205,8 @@ function formatDate(date?: string) {
 }
 
 export default function MaterialsView() {
+  const router = useRouter();
+
   const [docs, setDocs] =
     useState<Material[]>([]);
 
@@ -221,6 +224,9 @@ export default function MaterialsView() {
 
   const [uploading, setUploading] =
     useState(false);
+
+  const [generatingId, setGeneratingId] =
+    useState<string | null>(null);
 
   const [deletingId, setDeletingId] =
     useState<string | null>(null);
@@ -272,6 +278,7 @@ export default function MaterialsView() {
               Authorization:
                 `Bearer ${token}`,
             },
+            cache: "no-store",
           }
         );
 
@@ -491,6 +498,114 @@ export default function MaterialsView() {
         fileInputRef.current.value =
           "";
       }
+    }
+  }
+
+  /* Generate flashcards */
+  async function handleGenerateFlashcards(
+    material: Material
+  ) {
+    const materialId =
+      getMaterialId(material);
+
+    if (!materialId) {
+      setUploadMessage(
+        "This material cannot generate flashcards because its ID is missing."
+      );
+
+      return;
+    }
+
+    const hasExtractedText =
+      typeof material.extractedText ===
+        "string" &&
+      material.extractedText.trim()
+        .length > 0;
+
+    if (!hasExtractedText) {
+      setOpenMenuId(null);
+
+      setUploadMessage(
+        "This material is still being processed. Please try again when text extraction is complete."
+      );
+
+      return;
+    }
+
+    try {
+      setGeneratingId(materialId);
+      setOpenMenuId(null);
+      setUploadMessage(
+        "Generating flashcards from your material..."
+      );
+
+      const token =
+        await getAccessToken();
+
+      if (!token) {
+        throw new Error(
+          "You are not signed in."
+        );
+      }
+
+      const response =
+        await fetch(
+          `${API_BASE}/flashcards/generate`,
+          {
+            method: "POST",
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              materialId,
+            }),
+          }
+        );
+
+      const data =
+        await response
+          .json()
+          .catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            `Flashcard generation failed: ${response.status}`
+        );
+      }
+
+      const deckId =
+        data.deck?.deckId;
+
+      if (!deckId) {
+        throw new Error(
+          "Flashcard generation succeeded, but no deck ID was returned."
+        );
+      }
+
+      setUploadMessage(
+        "Flashcards generated successfully."
+      );
+
+      router.push(
+        `/flashcards/${deckId}`
+      );
+    } catch (error) {
+      console.error(
+        "Flashcard generation failed:",
+        error
+      );
+
+      setUploadMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to generate flashcards. Please try again."
+      );
+    } finally {
+      setGeneratingId(null);
     }
   }
 
@@ -753,8 +868,7 @@ export default function MaterialsView() {
                 •
               </span>
 
-              {processedPercentage}%
-              {" "}processed
+              {processedPercentage}% processed
 
               <span className="mx-1 text-[#2d6a1b]">
                 •
@@ -1011,6 +1125,11 @@ export default function MaterialsView() {
                 deletingId ===
                   materialId;
 
+              const isGenerating =
+                !!materialId &&
+                generatingId ===
+                  materialId;
+
               const menuOpen =
                 openMenuId ===
                 materialKey;
@@ -1091,6 +1210,7 @@ export default function MaterialsView() {
                       {menuOpen && (
                         <div className="absolute right-0 top-12 z-30 w-52 rounded-xl border border-[#e3dfd7] bg-white p-1.5 shadow-[0_12px_35px_rgba(0,0,0,.12)]">
 
+                          {/* Ask AI */}
                           <button
                             type="button"
                             disabled
@@ -1099,14 +1219,26 @@ export default function MaterialsView() {
                             ✦ Ask AI
                           </button>
 
+                          {/* Generate Flashcards */}
                           <button
                             type="button"
-                            disabled
-                            className="flex w-full items-center rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[#717a6b] opacity-60"
+                            disabled={
+                              !hasExtractedText ||
+                              isGenerating
+                            }
+                            onClick={() =>
+                              handleGenerateFlashcards(
+                                doc
+                              )
+                            }
+                            className="flex w-full items-center rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[#41493c] transition hover:bg-[#f5f3ee] disabled:cursor-not-allowed disabled:opacity-40"
                           >
-                            ▣ Generate Flashcards
+                            {isGenerating
+                              ? "Generating..."
+                              : "✦ Generate Flashcards"}
                           </button>
 
+                          {/* View Extracted Text */}
                           <button
                             type="button"
                             disabled={
@@ -1124,6 +1256,7 @@ export default function MaterialsView() {
 
                           <div className="my-1 border-t border-[#eeeae3]" />
 
+                          {/* Delete */}
                           <button
                             type="button"
                             disabled={
