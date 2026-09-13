@@ -39,7 +39,9 @@ function getMasteryLabel() {
   return "New deck";
 }
 
-function getMasteryCount(deck: FlashcardDeck) {
+function getMasteryCount(
+  deck: FlashcardDeck
+) {
   return `0/${deck.cardCount} known`;
 }
 
@@ -49,23 +51,29 @@ function getBottomLabel() {
 
 type FlashcardCardProps = {
   deck: FlashcardDeck;
+  menuOpen: boolean;
+  onToggleMenu: (deckId: string) => void;
   onReview: (deckId: string) => void;
+  onDelete: (deck: FlashcardDeck) => void;
 };
 
 function FlashcardCard({
   deck,
+  menuOpen,
+  onToggleMenu,
   onReview,
+  onDelete,
 }: FlashcardCardProps) {
   return (
-    <article className="relative flex min-h-72 flex-col justify-between overflow-hidden rounded-2xl bg-white p-5 shadow-sm">
+    <article className="relative flex min-h-72 flex-col justify-between overflow-visible rounded-2xl bg-white p-5 shadow-sm">
       {/* Top accent */}
       <i
-        className={`absolute inset-x-0 top-0 h-1 ${getTopBarClass()}`}
+        className={`absolute inset-x-0 top-0 h-1 rounded-t-2xl ${getTopBarClass()}`}
       />
 
       <div>
         {/* Card header */}
-        <div className="flex justify-between">
+        <div className="flex items-start justify-between">
           <span className="grid size-8 place-items-center rounded-lg bg-[#f0eee8] text-[#2d6a1b]">
             <Icon
               name="card"
@@ -73,6 +81,53 @@ function FlashcardCard({
             />
           </span>
 
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() =>
+                onToggleMenu(deck.deckId)
+              }
+              className="grid size-9 place-items-center rounded-lg text-[#41493c] transition hover:bg-[#f5f3ee]"
+              aria-label="Flashcard deck options"
+              aria-expanded={menuOpen}
+            >
+              <span className="text-xl leading-none">
+                ⋮
+              </span>
+            </button>
+
+            {menuOpen && (
+              <div className="absolute right-0 top-10 z-30 w-44 rounded-xl border border-[#e3dfd7] bg-white p-1.5 shadow-[0_12px_35px_rgba(0,0,0,.12)]">
+
+                {/* Review */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    onReview(deck.deckId)
+                  }
+                  className="flex w-full items-center rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[#41493c] transition hover:bg-[#f5f3ee]"
+                >
+                  ▶ Review
+                </button>
+
+                {/* Delete */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    onDelete(deck)
+                  }
+                  className="flex w-full items-center rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-[#dc2626] transition hover:bg-[#fff1f1]"
+                >
+                  🗑 Delete
+                </button>
+
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Card count */}
+        <div className="mt-3">
           <span className="rounded-full bg-[#eae8e2] px-2 py-1 text-[11px] font-bold text-[#41493c]">
             {deck.cardCount} cards
           </span>
@@ -90,7 +145,9 @@ function FlashcardCard({
         {/* Mastery */}
         <div className="mt-5 rounded-xl bg-[#f5f3ee] p-3">
           <div className="flex justify-between text-[11px] font-bold">
-            <span>{getMasteryLabel()}</span>
+            <span>
+              {getMasteryLabel()}
+            </span>
 
             <span className="text-[#2d6a1b]">
               {getMasteryCount(deck)}
@@ -116,7 +173,9 @@ function FlashcardCard({
 
         <button
           type="button"
-          onClick={() => onReview(deck.deckId)}
+          onClick={() =>
+            onReview(deck.deckId)
+          }
           className={`rounded-xl px-4 py-2 text-sm font-semibold ${getButtonClass()}`}
         >
           ▶ Review
@@ -176,14 +235,21 @@ export default function FlashcardsView() {
   const [showGenerateModal, setShowGenerateModal] =
     useState(false);
 
+  const [openMenuId, setOpenMenuId] =
+    useState<string | null>(null);
+
+  const [deleteTarget, setDeleteTarget] =
+    useState<FlashcardDeck | null>(null);
+
   const [error, setError] =
     useState("");
 
   async function getToken() {
-    const session = await fetchAuthSession();
+    const session =
+      await fetchAuthSession();
 
     const token =
-      session.tokens?.idToken?.toString();
+      session.tokens?.accessToken?.toString();
 
     if (!token) {
       throw new Error(
@@ -199,19 +265,23 @@ export default function FlashcardsView() {
       setLoading(true);
       setError("");
 
-      const token = await getToken();
+      const token =
+        await getToken();
 
-      const response = await fetch(
-        `${API_BASE}/flashcards`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          cache: "no-store",
-        }
-      );
+      const response =
+        await fetch(
+          `${API_BASE}/flashcards`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+            cache: "no-store",
+          }
+        );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -220,7 +290,11 @@ export default function FlashcardsView() {
         );
       }
 
-      setDecks(data.decks || []);
+      setDecks(
+        Array.isArray(data.decks)
+          ? data.decks
+          : []
+      );
     } catch (err) {
       console.error(err);
 
@@ -236,19 +310,23 @@ export default function FlashcardsView() {
 
   async function loadMaterials() {
     try {
-      const token = await getToken();
+      const token =
+        await getToken();
 
-      const response = await fetch(
-        `${API_BASE}/materials`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          cache: "no-store",
-        }
-      );
+      const response =
+        await fetch(
+          `${API_BASE}/materials`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+            cache: "no-store",
+          }
+        );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -257,7 +335,11 @@ export default function FlashcardsView() {
         );
       }
 
-      setMaterials(data.materials || []);
+      setMaterials(
+        Array.isArray(data.materials)
+          ? data.materials
+          : []
+      );
     } catch (err) {
       console.error(err);
 
@@ -271,32 +353,41 @@ export default function FlashcardsView() {
 
   async function handleOpenGenerate() {
     setError("");
+
     await loadMaterials();
+
     setShowGenerateModal(true);
   }
 
-  async function handleGenerate(materialId: string) {
+  async function handleGenerate(
+    materialId: string
+  ) {
     try {
       setGenerating(true);
       setError("");
 
-      const token = await getToken();
+      const token =
+        await getToken();
 
-      const response = await fetch(
-        `${API_BASE}/flashcards/generate`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            materialId,
-          }),
-        }
-      );
+      const response =
+        await fetch(
+          `${API_BASE}/flashcards/generate`,
+          {
+            method: "POST",
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              materialId,
+            }),
+          }
+        );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -321,44 +412,74 @@ export default function FlashcardsView() {
     }
   }
 
+  /* Delete */
+  function handleDelete(
+    deck: FlashcardDeck
+  ) {
+    setOpenMenuId(null);
+    setDeleteTarget(deck);
+  }
+
+  /* Frontend only */
+  function confirmDelete() {
+    if (!deleteTarget) {
+      return;
+    }
+
+    setDecks((current) =>
+      current.filter(
+        (deck) =>
+          deck.deckId !==
+          deleteTarget.deckId
+      )
+    );
+
+    setDeleteTarget(null);
+  }
+
   useEffect(() => {
     loadDecks();
   }, []);
 
-  const filteredDecks = useMemo(() => {
-    const query =
-      searchQuery.trim().toLowerCase();
+  const filteredDecks =
+    useMemo(() => {
+      const query =
+        searchQuery
+          .trim()
+          .toLowerCase();
 
-    return decks.filter((deck) => {
-      const matchesSearch =
-        !query ||
-        deck.title
-          .toLowerCase()
-          .includes(query) ||
-        deck.materialName
-          .toLowerCase()
-          .includes(query);
+      return decks.filter((deck) => {
+        const matchesSearch =
+          !query ||
+          deck.title
+            .toLowerCase()
+            .includes(query) ||
+          deck.materialName
+            .toLowerCase()
+            .includes(query);
 
-      const matchesMaterial =
-        selectedMaterialId === "all" ||
-        deck.materialId === selectedMaterialId;
+        const matchesMaterial =
+          selectedMaterialId === "all" ||
+          deck.materialId ===
+            selectedMaterialId;
 
-      return (
-        matchesSearch &&
-        matchesMaterial
-      );
-    });
-  }, [
-    decks,
-    searchQuery,
-    selectedMaterialId,
-  ]);
+        return (
+          matchesSearch &&
+          matchesMaterial
+        );
+      });
+    }, [
+      decks,
+      searchQuery,
+      selectedMaterialId,
+    ]);
 
-  const totalCards = decks.reduce(
-    (total, deck) =>
-      total + deck.cardCount,
-    0
-  );
+  const totalCards =
+    decks.reduce(
+      (total, deck) =>
+        total + deck.cardCount,
+      0
+    );
 
   return (
     <>
@@ -381,7 +502,9 @@ export default function FlashcardsView() {
 
         <button
           type="button"
-          onClick={handleOpenGenerate}
+          onClick={
+            handleOpenGenerate
+          }
           className="rounded-xl bg-[#ffdcbe] px-5 py-3 text-sm font-semibold text-[#2c1600]"
         >
           ✦ Generate from Material
@@ -399,11 +522,15 @@ export default function FlashcardsView() {
       <div className="mt-7 flex flex-col gap-3 rounded-xl bg-[#f0eee8] p-4 sm:flex-row">
         <SearchBar
           value={searchQuery}
-          onChange={setSearchQuery}
+          onChange={
+            setSearchQuery
+          }
         />
 
         <select
-          value={selectedMaterialId}
+          value={
+            selectedMaterialId
+          }
           onChange={(event) =>
             setSelectedMaterialId(
               event.target.value
@@ -415,14 +542,20 @@ export default function FlashcardsView() {
             All materials
           </option>
 
-          {materials.map((material) => (
-            <option
-              key={material.materialId}
-              value={material.materialId}
-            >
-              {material.name}
-            </option>
-          ))}
+          {materials.map(
+            (material) => (
+              <option
+                key={
+                  material.materialId
+                }
+                value={
+                  material.materialId
+                }
+              >
+                {material.name}
+              </option>
+            )
+          )}
         </select>
 
         <span className="rounded-full bg-white px-3 py-2 text-sm font-semibold text-[#2d6a1b]">
@@ -439,17 +572,38 @@ export default function FlashcardsView() {
         </div>
       ) : filteredDecks.length > 0 ? (
         <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {filteredDecks.map((deck) => (
-            <FlashcardCard
-              key={deck.deckId}
-              deck={deck}
-              onReview={(deckId) =>
-                router.push(
-                  `/flashcards/${deckId}`
-                )
-              }
-            />
-          ))}
+          {filteredDecks.map(
+            (deck) => (
+              <FlashcardCard
+                key={deck.deckId}
+                deck={deck}
+                menuOpen={
+                  openMenuId ===
+                  deck.deckId
+                }
+                onToggleMenu={(
+                  deckId
+                ) =>
+                  setOpenMenuId(
+                    openMenuId ===
+                      deckId
+                      ? null
+                      : deckId
+                  )
+                }
+                onReview={(
+                  deckId
+                ) =>
+                  router.push(
+                    `/flashcards/${deckId}`
+                  )
+                }
+                onDelete={
+                  handleDelete
+                }
+              />
+            )
+          )}
         </div>
       ) : (
         <div className="mt-6 rounded-2xl bg-white p-10 text-center shadow-sm">
@@ -465,14 +619,17 @@ export default function FlashcardsView() {
           </h2>
 
           <p className="mx-auto mt-1 max-w-md text-sm text-[#41493c]">
-            Upload course material first. StudyMate
-            AI will generate flashcards from your
-            uploaded materials.
+            Upload course material first.
+            StudyMate AI will generate
+            flashcards from your uploaded
+            materials.
           </p>
 
           <button
             type="button"
-            onClick={handleOpenGenerate}
+            onClick={
+              handleOpenGenerate
+            }
             className="mt-5 rounded-xl bg-[#468432] px-5 py-2.5 text-sm font-semibold text-white"
           >
             ✦ Generate Flashcards
@@ -482,6 +639,7 @@ export default function FlashcardsView() {
 
       {/* Bottom Information */}
       <div className="mt-8 grid gap-5 lg:grid-cols-3">
+
         {/* Sync Information */}
         <div className="rounded-2xl bg-[#f0eee8] p-5 lg:col-span-2">
           <b className="text-[#356b10]">
@@ -489,14 +647,14 @@ export default function FlashcardsView() {
           </b>
 
           <h2 className="mt-2 text-lg font-semibold">
-            Generated from your uploaded course
-            notes
+            Generated from your uploaded
+            course notes
           </h2>
 
           <p className="mt-1 text-sm text-[#41493c]">
-            StudyMate AI continuously aligns
-            questions with your uploaded study
-            materials.
+            StudyMate AI continuously
+            aligns questions with your
+            uploaded study materials.
           </p>
         </div>
 
@@ -507,7 +665,9 @@ export default function FlashcardsView() {
           </span>
 
           <div>
-            <b>Weekly Goal Progress</b>
+            <b>
+              Weekly Goal Progress
+            </b>
 
             <p className="text-sm text-[#41493c]">
               No cards retained yet
@@ -519,84 +679,166 @@ export default function FlashcardsView() {
       {/* Generate Modal */}
       {showGenerateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+
             <div className="flex items-start justify-between gap-4">
+
               <div>
                 <h2 className="text-xl font-bold">
                   Generate Flashcards
                 </h2>
 
                 <p className="mt-1 text-sm text-[#41493c]">
-                  Choose an uploaded material for
-                  StudyMate AI to generate flashcards
-                  from.
+                  Choose an uploaded material
+                  for StudyMate AI to generate
+                  flashcards from.
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={() =>
-                  setShowGenerateModal(false)
+                  setShowGenerateModal(
+                    false
+                  )
                 }
                 className="rounded-lg px-2 py-1 text-lg text-[#717a6b] hover:bg-[#f5f3ee]"
               >
                 ×
               </button>
+
             </div>
 
             <div className="mt-5 max-h-80 space-y-2 overflow-y-auto">
+
               {materials.length === 0 ? (
                 <div className="rounded-xl bg-[#f5f3ee] p-5 text-center">
                   <p className="text-sm text-[#41493c]">
-                    No uploaded materials available.
+                    No uploaded materials
+                    available.
                   </p>
                 </div>
               ) : (
-                materials.map((material) => {
-                  const hasText =
-                    Boolean(
-                      material.extractedText?.trim()
-                    );
+                materials.map(
+                  (material) => {
+                    const hasText =
+                      Boolean(
+                        material.extractedText?.trim()
+                      );
 
-                  return (
-                    <div
-                      key={material.materialId}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-[#e4e2dd] p-4"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">
-                          {material.name}
-                        </p>
-
-                        <p className="mt-1 text-xs text-[#717a6b]">
-                          {material.pageCount
-                            ? `${material.pageCount} pages`
-                            : "Uploaded material"}
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        disabled={
-                          !hasText ||
-                          generating
+                    return (
+                      <div
+                        key={
+                          material.materialId
                         }
-                        onClick={() =>
-                          handleGenerate(
-                            material.materialId
-                          )
-                        }
-                        className="shrink-0 rounded-lg bg-[#468432] px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        className="flex items-center justify-between gap-3 rounded-xl border border-[#e4e2dd] p-4"
                       >
-                        {generating
-                          ? "Generating..."
-                          : "Generate"}
-                      </button>
-                    </div>
-                  );
-                })
+
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">
+                            {
+                              material.name
+                            }
+                          </p>
+
+                          <p className="mt-1 text-xs text-[#717a6b]">
+                            {material.pageCount
+                              ? `${material.pageCount} pages`
+                              : "Uploaded material"}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={
+                            !hasText ||
+                            generating
+                          }
+                          onClick={() =>
+                            handleGenerate(
+                              material.materialId
+                            )
+                          }
+                          className="shrink-0 rounded-lg bg-[#468432] px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {generating
+                            ? "Generating..."
+                            : "Generate"}
+                        </button>
+
+                      </div>
+                    );
+                  }
+                )
               )}
+
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4">
+
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(0,0,0,.2)]">
+
+            <div className="flex items-start gap-4">
+
+              <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#fff1f1] text-[#dc2626]">
+                <span className="text-lg">
+                  🗑
+                </span>
+              </div>
+
+              <div>
+                <h2 className="text-lg font-bold">
+                  Delete flashcards?
+                </h2>
+
+                <p className="mt-1 text-sm leading-6 text-[#41493c]">
+                  Delete "
+                  {deleteTarget.title}
+                  "?
+                </p>
+
+                <p className="mt-2 text-xs leading-5 text-[#717a6b]">
+                  This will remove the deck
+                  from this page. The
+                  permanent database deletion
+                  will be connected next.
+                </p>
+              </div>
+
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+
+              <button
+                type="button"
+                onClick={() =>
+                  setDeleteTarget(
+                    null
+                  )
+                }
+                className="rounded-xl border border-[#e3dfd7] px-4 py-2.5 text-sm font-semibold text-[#41493c] transition hover:bg-[#f5f3ee]"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={
+                  confirmDelete
+                }
+                className="rounded-xl bg-[#dc2626] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#b91c1c]"
+              >
+                Delete
+              </button>
+
+            </div>
+
           </div>
         </div>
       )}

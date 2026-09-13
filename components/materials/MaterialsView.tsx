@@ -54,17 +54,15 @@ function getMaterialKey(
   material: Material,
   index: number
 ) {
-  const materialId =
-    getMaterialId(material);
+  const materialId = getMaterialId(material);
 
   if (materialId) {
     return materialId;
   }
 
-  const name =
-    getMaterialName(material)
-      .replace(/[^a-zA-Z0-9-_]/g, "-")
-      .slice(0, 80);
+  const name = getMaterialName(material)
+    .replace(/[^a-zA-Z0-9-_]/g, "-")
+    .slice(0, 80);
 
   const date =
     material.createdAt ||
@@ -86,12 +84,8 @@ function getFileExtension(fileName: string) {
 function getFileType(
   material: Material
 ): FilterType {
-  const fileName =
-    getMaterialName(material);
-
-  const extension =
-    getFileExtension(fileName);
-
+  const fileName = getMaterialName(material);
+  const extension = getFileExtension(fileName);
   const contentType =
     material.contentType?.toLowerCase() ?? "";
 
@@ -117,8 +111,7 @@ function getFileType(
   if (
     extension === "ppt" ||
     extension === "pptx" ||
-    contentType ===
-      "application/vnd.ms-powerpoint" ||
+    contentType === "application/vnd.ms-powerpoint" ||
     contentType ===
       "application/vnd.openxmlformats-officedocument.presentationml.presentation"
   ) {
@@ -129,8 +122,7 @@ function getFileType(
 }
 
 function getFileIcon(material: Material) {
-  const type =
-    getFileType(material);
+  const type = getFileType(material);
 
   if (type === "pdf") {
     return "PDF";
@@ -162,17 +154,14 @@ function getSizeMb(material: Material) {
 }
 
 function formatFileSize(material: Material) {
-  const sizeMb =
-    getSizeMb(material);
+  const sizeMb = getSizeMb(material);
 
   if (sizeMb <= 0) {
     return "0 MB";
   }
 
   if (sizeMb < 1) {
-    return `${Math.round(
-      sizeMb * 1024
-    )} KB`;
+    return `${Math.round(sizeMb * 1024)} KB`;
   }
 
   return `${sizeMb.toFixed(2)} MB`;
@@ -183,14 +172,9 @@ function formatDate(date?: string) {
     return "Recently uploaded";
   }
 
-  const parsed =
-    new Date(date);
+  const parsed = new Date(date);
 
-  if (
-    Number.isNaN(
-      parsed.getTime()
-    )
-  ) {
+  if (Number.isNaN(parsed.getTime())) {
     return "Recently uploaded";
   }
 
@@ -297,9 +281,7 @@ export default function MaterialsView() {
       const materials =
         Array.isArray(data)
           ? data
-          : Array.isArray(
-                data.materials
-              )
+          : Array.isArray(data.materials)
             ? data.materials
             : [];
 
@@ -501,7 +483,7 @@ export default function MaterialsView() {
     }
   }
 
-  /* Generate flashcards */
+  /* Generate Flashcards */
   async function handleGenerateFlashcards(
     material: Material
   ) {
@@ -529,6 +511,11 @@ export default function MaterialsView() {
         "This material is still being processed. Please try again when text extraction is complete."
       );
 
+      return;
+    }
+
+    /* Prevent double click */
+    if (generatingId === materialId) {
       return;
     }
 
@@ -585,10 +572,6 @@ export default function MaterialsView() {
           "Flashcard generation succeeded, but no deck ID was returned."
         );
       }
-
-      setUploadMessage(
-        "Flashcards generated successfully."
-      );
 
       router.push(
         `/flashcards/${deckId}`
@@ -703,7 +686,7 @@ export default function MaterialsView() {
     }
   }
 
-  /* View extracted text */
+  /* View Extracted Text */
   function handleViewExtractedText(
     material: Material
   ) {
@@ -1330,6 +1313,7 @@ export default function MaterialsView() {
 
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
+
                   <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#f0eee8] text-[9px] font-bold text-[#2d6a1b]">
                     {getFileIcon(
                       selectedMaterial
@@ -1350,6 +1334,7 @@ export default function MaterialsView() {
                         : ""}
                     </p>
                   </div>
+
                 </div>
               </div>
 
@@ -1363,10 +1348,12 @@ export default function MaterialsView() {
               >
                 ×
               </button>
+
             </div>
 
             {/* Extracted Text */}
             <div className="min-h-0 flex-1 overflow-y-auto bg-[#faf9f6] px-5 py-5 sm:px-7 sm:py-6">
+
               {selectedMaterial.extractedText?.trim() ? (
                 <div className="rounded-xl bg-white p-5 shadow-sm sm:p-7">
                   <p className="whitespace-pre-wrap text-sm leading-7 text-[#2f332c]">
@@ -1377,7 +1364,9 @@ export default function MaterialsView() {
                 </div>
               ) : (
                 <div className="flex min-h-[300px] items-center justify-center">
+
                   <div className="text-center">
+
                     <div className="mx-auto grid size-12 place-items-center rounded-xl bg-[#f0eee8]">
                       <span className="text-xl">
                         📄
@@ -1394,13 +1383,17 @@ export default function MaterialsView() {
                       Try again after processing
                       finishes.
                     </p>
+
                   </div>
+
                 </div>
               )}
+
             </div>
 
             {/* Viewer Footer */}
             <div className="flex items-center justify-between border-t border-[#eeeae3] px-5 py-3 sm:px-6">
+
               <p className="text-xs text-[#717a6b]">
                 {selectedMaterial.extractedText
                   ? `${selectedMaterial.extractedText.length.toLocaleString()} characters`
@@ -1416,6 +1409,7 @@ export default function MaterialsView() {
               >
                 Close
               </button>
+
             </div>
 
           </div>
