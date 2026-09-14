@@ -17,6 +17,12 @@ type FlashcardDeck = {
   cardCount: number;
   createdAt: string;
   updatedAt: string;
+
+  // Progress from DynamoDB
+  progress?: number;
+  reviewedCount?: number;
+  totalCards?: number;
+  completed?: boolean;
 };
 
 type Material = {
@@ -35,15 +41,55 @@ function getButtonClass() {
   return "bg-[#468432] text-white";
 }
 
-function getMasteryLabel() {
+function getProgress(deck: FlashcardDeck) {
+  const progress = Number(deck.progress ?? 0);
+
+  return Math.min(100, Math.max(0, progress));
+}
+
+function getReviewedCount(deck: FlashcardDeck) {
+  if (deck.reviewedCount !== undefined) {
+    return Number(deck.reviewedCount);
+  }
+
+  const progress = getProgress(deck);
+  return Math.round(
+    (progress / 100) * deck.cardCount
+  );
+}
+
+function getMasteryLabel(deck: FlashcardDeck) {
+  const progress = getProgress(deck);
+
+  if (progress >= 100) {
+    return "Completed";
+  }
+
+  if (progress > 0) {
+    return "In progress";
+  }
+
   return "New deck";
 }
 
 function getMasteryCount(deck: FlashcardDeck) {
-  return `0/${deck.cardCount} known`;
+  const reviewed = getReviewedCount(deck);
+  const total = deck.totalCards ?? deck.cardCount;
+
+  return `${reviewed}/${total} known`;
 }
 
-function getBottomLabel() {
+function getBottomLabel(deck: FlashcardDeck) {
+  const progress = getProgress(deck);
+
+  if (progress >= 100) {
+    return "Ready for quiz";
+  }
+
+  if (progress > 0) {
+    return `${progress}% reviewed`;
+  }
+
   return "Ready to start";
 }
 
@@ -62,6 +108,10 @@ function FlashcardCard({
   onReview,
   onDelete,
 }: FlashcardCardProps) {
+  const progress = getProgress(deck);
+  const reviewedCount = getReviewedCount(deck);
+  const totalCards = deck.totalCards ?? deck.cardCount;
+
   return (
     <article className="relative flex min-h-72 flex-col justify-between overflow-visible rounded-2xl bg-white p-5 shadow-sm">
       {/* Top accent */}
@@ -84,7 +134,9 @@ function FlashcardCard({
               aria-label="Flashcard deck options"
               aria-expanded={menuOpen}
             >
-              <span className="text-xl leading-none">⋮</span>
+              <span className="text-xl leading-none">
+                ⋮
+              </span>
             </button>
 
             {menuOpen && (
@@ -119,7 +171,9 @@ function FlashcardCard({
         </div>
 
         {/* Title */}
-        <h2 className="mt-5 text-lg font-semibold">{deck.title}</h2>
+        <h2 className="mt-5 text-lg font-semibold">
+          {deck.title}
+        </h2>
 
         <p className="mt-1 text-sm text-[#41493c]">
           Generated from {deck.materialName}
@@ -128,18 +182,32 @@ function FlashcardCard({
         {/* Mastery */}
         <div className="mt-5 rounded-xl bg-[#f5f3ee] p-3">
           <div className="flex justify-between text-[11px] font-bold">
-            <span>{getMasteryLabel()}</span>
+            <span>
+              {getMasteryLabel(deck)}
+            </span>
 
-            <span className="text-[#2d6a1b]">{getMasteryCount(deck)}</span>
+            <span className="text-[#2d6a1b]">
+              {getMasteryCount(deck)}
+            </span>
           </div>
 
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#e4e2dd]">
             <i
-              className="block h-full rounded-full bg-[#99d771]"
+              className="block h-full rounded-full bg-[#99d771] transition-all duration-500"
               style={{
-                width: "0%",
+                width: `${progress}%`,
               }}
             />
+          </div>
+
+          <div className="mt-1.5 flex justify-between text-[10px] text-[#717a6b]">
+            <span>
+              {reviewedCount} of {totalCards} reviewed
+            </span>
+
+            <span>
+              {progress}%
+            </span>
           </div>
         </div>
       </div>
@@ -147,7 +215,7 @@ function FlashcardCard({
       {/* Card footer */}
       <div className="mt-5 flex items-center justify-between gap-3">
         <span className="text-[11px] text-[#41493c]">
-          {getBottomLabel()}
+          {getBottomLabel(deck)}
         </span>
 
         <button
@@ -178,7 +246,9 @@ function SearchBar({
 
       <input
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) =>
+          onChange(event.target.value)
+        }
         placeholder="Search flashcard decks..."
         className="w-full rounded-xl bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-[#468432]"
       />
@@ -194,13 +264,16 @@ export default function FlashcardsView() {
   const [selectedMaterialId, setSelectedMaterialId] =
     useState("all");
 
-  const [decks, setDecks] = useState<FlashcardDeck[]>([]);
+  const [decks, setDecks] =
+    useState<FlashcardDeck[]>([]);
 
-  const [materials, setMaterials] = useState<Material[]>([]);
+  const [materials, setMaterials] =
+    useState<Material[]>([]);
 
   const [loading, setLoading] = useState(true);
 
-  const [generating, setGenerating] = useState(false);
+  const [generating, setGenerating] =
+    useState(false);
 
   const [showGenerateModal, setShowGenerateModal] =
     useState(false);
@@ -211,14 +284,17 @@ export default function FlashcardsView() {
   const [deleteTarget, setDeleteTarget] =
     useState<FlashcardDeck | null>(null);
 
-  const [deleting, setDeleting] = useState(false);
+  const [deleting, setDeleting] =
+    useState(false);
 
   const [error, setError] = useState("");
 
   async function getToken() {
-    const session = await fetchAuthSession();
+    const session =
+      await fetchAuthSession();
 
-    const token = session.tokens?.accessToken?.toString();
+    const token =
+      session.tokens?.accessToken?.toString();
 
     if (!token) {
       throw new Error(
@@ -236,18 +312,23 @@ export default function FlashcardsView() {
 
       const token = await getToken();
 
-      const response = await fetch(`${API_BASE}/flashcards`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        cache: "no-store",
-      });
+      const response = await fetch(
+        `${API_BASE}/flashcards`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: "no-store",
+        }
+      );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.message || "Unable to load flashcard decks."
+          data.message ||
+            "Unable to load flashcard decks."
         );
       }
 
@@ -273,18 +354,23 @@ export default function FlashcardsView() {
     try {
       const token = await getToken();
 
-      const response = await fetch(`${API_BASE}/materials`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        cache: "no-store",
-      });
+      const response = await fetch(
+        `${API_BASE}/materials`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: "no-store",
+        }
+      );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.message || "Unable to load materials."
+          data.message ||
+            "Unable to load materials."
         );
       }
 
@@ -312,7 +398,9 @@ export default function FlashcardsView() {
     setShowGenerateModal(true);
   }
 
-  async function handleGenerate(materialId: string) {
+  async function handleGenerate(
+    materialId: string
+  ) {
     try {
       setGenerating(true);
       setError("");
@@ -333,7 +421,8 @@ export default function FlashcardsView() {
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -359,7 +448,9 @@ export default function FlashcardsView() {
   }
 
   /* Delete */
-  function handleDelete(deck: FlashcardDeck) {
+  function handleDelete(
+    deck: FlashcardDeck
+  ) {
     setOpenMenuId(null);
     setDeleteTarget(deck);
     setError("");
@@ -386,7 +477,8 @@ export default function FlashcardsView() {
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -398,7 +490,8 @@ export default function FlashcardsView() {
       setDecks((current) =>
         current.filter(
           (deck) =>
-            deck.deckId !== deleteTarget.deckId
+            deck.deckId !==
+            deleteTarget.deckId
         )
       );
 
@@ -421,19 +514,28 @@ export default function FlashcardsView() {
   }, []);
 
   const filteredDecks = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const query =
+      searchQuery.trim().toLowerCase();
 
     return decks.filter((deck) => {
       const matchesSearch =
         !query ||
-        deck.title.toLowerCase().includes(query) ||
-        deck.materialName.toLowerCase().includes(query);
+        deck.title
+          .toLowerCase()
+          .includes(query) ||
+        deck.materialName
+          .toLowerCase()
+          .includes(query);
 
       const matchesMaterial =
         selectedMaterialId === "all" ||
-        deck.materialId === selectedMaterialId;
+        deck.materialId ===
+          selectedMaterialId;
 
-      return matchesSearch && matchesMaterial;
+      return (
+        matchesSearch &&
+        matchesMaterial
+      );
     });
   }, [
     decks,
@@ -442,9 +544,27 @@ export default function FlashcardsView() {
   ]);
 
   const totalCards = decks.reduce(
-    (total, deck) => total + deck.cardCount,
+    (total, deck) =>
+      total + deck.cardCount,
     0
   );
+
+  const totalReviewedCards =
+    decks.reduce(
+      (total, deck) =>
+        total +
+        getReviewedCount(deck),
+      0
+    );
+
+  const overallProgress =
+    totalCards > 0
+      ? Math.round(
+          (totalReviewedCards /
+            totalCards) *
+            100
+        )
+      : 0;
 
   return (
     <>
@@ -460,8 +580,8 @@ export default function FlashcardsView() {
           </h1>
 
           <p className="text-sm text-[#41493c]">
-            Generated from your uploaded course
-            materials
+            Generated from your uploaded
+            course materials
           </p>
         </div>
 
@@ -491,11 +611,15 @@ export default function FlashcardsView() {
         <select
           value={selectedMaterialId}
           onChange={(event) =>
-            setSelectedMaterialId(event.target.value)
+            setSelectedMaterialId(
+              event.target.value
+            )
           }
           className="rounded-xl bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-[#468432]"
         >
-          <option value="all">All materials</option>
+          <option value="all">
+            All materials
+          </option>
 
           {materials.map((material) => (
             <option
@@ -525,10 +649,14 @@ export default function FlashcardsView() {
             <FlashcardCard
               key={deck.deckId}
               deck={deck}
-              menuOpen={openMenuId === deck.deckId}
+              menuOpen={
+                openMenuId ===
+                deck.deckId
+              }
               onToggleMenu={(deckId) =>
                 setOpenMenuId(
-                  openMenuId === deckId
+                  openMenuId ===
+                    deckId
                     ? null
                     : deckId
                 )
@@ -545,7 +673,10 @@ export default function FlashcardsView() {
       ) : (
         <div className="mt-6 rounded-2xl bg-white p-10 text-center shadow-sm">
           <div className="mx-auto grid size-12 place-items-center rounded-xl bg-[#f0eee8] text-[#2d6a1b]">
-            <Icon name="card" className="size-6" />
+            <Icon
+              name="card"
+              className="size-6"
+            />
           </div>
 
           <h2 className="mt-4 font-semibold">
@@ -589,17 +720,22 @@ export default function FlashcardsView() {
           </p>
         </div>
 
-        {/* Weekly Goal */}
+        {/* Overall Progress */}
         <div className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-sm">
-          <span className="grid size-16 place-items-center rounded-full border-4 border-[#2d6a1b] font-bold text-[#2d6a1b]">
-            0%
+          <span
+            className="grid size-16 shrink-0 place-items-center rounded-full border-4 border-[#2d6a1b] font-bold text-[#2d6a1b]"
+          >
+            {overallProgress}%
           </span>
 
           <div>
-            <b>Weekly Goal Progress</b>
+            <b>
+              Flashcard Progress
+            </b>
 
             <p className="text-sm text-[#41493c]">
-              No cards retained yet
+              {totalReviewedCards} of{" "}
+              {totalCards} cards reviewed
             </p>
           </div>
         </div>
@@ -643,9 +779,10 @@ export default function FlashcardsView() {
                 </div>
               ) : (
                 materials.map((material) => {
-                  const hasText = Boolean(
-                    material.extractedText?.trim()
-                  );
+                  const hasText =
+                    Boolean(
+                      material.extractedText?.trim()
+                    );
 
                   return (
                     <div
@@ -707,7 +844,8 @@ export default function FlashcardsView() {
                 </h2>
 
                 <p className="mt-1 text-sm leading-6 text-[#41493c]">
-                  Delete "{deleteTarget.title}"?
+                  Delete "
+                  {deleteTarget.title}"?
                 </p>
 
                 <p className="mt-2 text-xs leading-5 text-[#717a6b]">
@@ -736,7 +874,9 @@ export default function FlashcardsView() {
                 onClick={confirmDelete}
                 className="rounded-xl bg-[#dc2626] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {deleting ? "Deleting..." : "Delete"}
+                {deleting
+                  ? "Deleting..."
+                  : "Delete"}
               </button>
             </div>
           </div>

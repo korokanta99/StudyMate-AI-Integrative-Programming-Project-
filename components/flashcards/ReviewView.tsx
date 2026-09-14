@@ -65,6 +65,30 @@ export default function ReviewView() {
     return token;
   }
 
+  async function recordStudyActivity(
+    token: string
+  ) {
+    try {
+      await fetch(
+        `${API_BASE}/activity`,
+        {
+          method: "POST",
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+            "Content-Type":
+              "application/json",
+          },
+        }
+      );
+    } catch (error) {
+      console.error(
+        "Failed to record study activity:",
+        error
+      );
+    }
+  }
+
   async function loadDeck() {
     try {
       setLoading(true);
@@ -134,6 +158,13 @@ export default function ReviewView() {
       };
 
       setDeck(normalizedDeck);
+
+      // Opening a real deck for review counts as study activity.
+      if (apiCards.length > 0) {
+        await recordStudyActivity(
+          token
+        );
+      }
     } catch (err) {
       console.error(
         "Failed to load flashcard deck:",
@@ -344,7 +375,7 @@ export default function ReviewView() {
       </div>
 
       {/* Flashcard */}
-      <div className="mt-8 w-full max-w-3xl">
+      <div className="mt-8 w-full max-w-3xl [perspective:1200px]">
 
         <button
           type="button"
@@ -355,44 +386,82 @@ export default function ReviewView() {
           }
           className="w-full text-left"
         >
-          <article className="min-h-[390px] rounded-3xl bg-white p-8 shadow-[0_12px_40px_rgba(70,132,50,.12)] transition hover:shadow-[0_16px_45px_rgba(70,132,50,.16)] sm:p-10">
+          <div
+            className={`relative min-h-[390px] w-full transition-transform duration-500 [transform-style:preserve-3d] ${
+              showAnswer
+                ? "[transform:rotateY(180deg)]"
+                : ""
+            }`}
+          >
 
-            {/* Card Header */}
-            <div className="flex items-center justify-between">
+            {/* Question Side */}
+            <article className="absolute inset-0 min-h-[390px] rounded-3xl bg-white p-8 shadow-[0_12px_40px_rgba(70,132,50,.12)] [backface-visibility:hidden] sm:p-10">
 
-              <span className="rounded-full bg-[#f0eee8] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[#2d6a1b]">
-                {showAnswer
-                  ? "Answer"
-                  : "Question"}
-              </span>
+              {/* Card Header */}
+              <div className="flex items-center justify-between">
 
-              <Icon
-                name="card"
-                className="size-6 text-[#2d6a1b]"
-              />
+                <span className="rounded-full bg-[#f0eee8] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[#2d6a1b]">
+                  Question
+                </span>
 
-            </div>
+                <Icon
+                  name="card"
+                  className="size-6 text-[#2d6a1b]"
+                />
 
-            {/* Card Content */}
-            <div className="mt-12">
+              </div>
 
-              <p className="text-xs font-bold uppercase tracking-wider text-[#717a6b]">
-                {showAnswer
-                  ? "Answer"
-                  : "Question"}
+              {/* Card Content */}
+              <div className="mt-12">
+
+                <p className="text-xs font-bold uppercase tracking-wider text-[#717a6b]">
+                  Question
+                </p>
+
+                <h1 className="mt-4 text-2xl font-bold leading-relaxed sm:text-3xl">
+                  {currentCard.question}
+                </h1>
+
+              </div>
+
+              <p className="mt-12 text-center text-xs font-semibold text-[#717a6b]">
+                Click the card to reveal the answer
               </p>
 
-              <h1 className="mt-4 text-2xl font-bold leading-relaxed sm:text-3xl">
-                {showAnswer
-                  ? currentCard.answer
-                  : currentCard.question}
-              </h1>
+            </article>
 
-            </div>
+            {/* Answer Side */}
+            <article className="absolute inset-0 min-h-[390px] rounded-3xl bg-white p-8 shadow-[0_12px_40px_rgba(70,132,50,.12)] [backface-visibility:hidden] [transform:rotateY(180deg)] sm:p-10">
 
-            {/* Explanation */}
-            {showAnswer &&
-              currentCard.explanation && (
+              {/* Card Header */}
+              <div className="flex items-center justify-between">
+
+                <span className="rounded-full bg-[#eaf7e3] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[#2d6a1b]">
+                  Answer
+                </span>
+
+                <Icon
+                  name="card"
+                  className="size-6 text-[#2d6a1b]"
+                />
+
+              </div>
+
+              {/* Card Content */}
+              <div className="mt-12">
+
+                <p className="text-xs font-bold uppercase tracking-wider text-[#717a6b]">
+                  Answer
+                </p>
+
+                <h1 className="mt-4 text-2xl font-bold leading-relaxed sm:text-3xl">
+                  {currentCard.answer}
+                </h1>
+
+              </div>
+
+              {/* Explanation */}
+              {currentCard.explanation && (
                 <div className="mt-8 rounded-xl bg-[#f5f3ee] p-4">
 
                   <p className="text-xs font-bold uppercase tracking-wider text-[#717a6b]">
@@ -408,13 +477,13 @@ export default function ReviewView() {
                 </div>
               )}
 
-            {!showAnswer && (
-              <p className="mt-12 text-center text-xs font-semibold text-[#717a6b]">
-                Click the card to reveal the answer
+              <p className="mt-8 text-center text-xs font-semibold text-[#717a6b]">
+                Click the card to see the question
               </p>
-            )}
 
-          </article>
+            </article>
+
+          </div>
         </button>
 
       </div>
@@ -443,7 +512,7 @@ export default function ReviewView() {
           className="rounded-xl bg-[#ffdcbe] px-5 py-3 text-sm font-semibold text-[#2c1600]"
         >
           {showAnswer
-            ? "Hide Answer"
+            ? "Show Question"
             : "Show Answer"}
         </button>
 

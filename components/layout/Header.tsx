@@ -23,6 +23,15 @@ type SubscriptionData = {
   cancelAtPeriodEnd?: boolean;
 };
 
+type Notification = {
+  id: string;
+  title: string;
+  message: string;
+  type?: string;
+  read?: boolean;
+  createdAt?: string;
+};
+
 const API_URL =
   "https://8auzzcojhh.execute-api.ap-southeast-1.amazonaws.com";
 
@@ -42,9 +51,19 @@ export default function Header() {
   const [checkingSubscription, setCheckingSubscription] =
     useState(true);
 
+  const [streak, setStreak] = useState(0);
+
+  const [notifications, setNotifications] =
+    useState<Notification[]>([]);
+
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const [notificationsOpen, setNotificationsOpen] =
+    useState(false);
+
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Same initials logic as ProfileView
+  // Initials
   const initials = auth.name
     .split(" ")
     .filter(Boolean)
@@ -53,7 +72,7 @@ export default function Header() {
     .slice(0, 2)
     .toUpperCase();
 
-  // Real subscription state
+  // Subscription
   const isPro =
     subscription?.pro === true ||
     subscription?.status === "active" ||
@@ -63,7 +82,7 @@ export default function Header() {
     ? "Premium"
     : "Free";
 
-  // Load real subscription
+  // Load subscription
   useEffect(() => {
     async function loadSubscription() {
       try {
@@ -126,7 +145,7 @@ export default function Header() {
     loadSubscription();
   }, []);
 
-  // Load real uploaded materials for search
+  // Load materials
   useEffect(() => {
     async function loadMaterials() {
       try {
@@ -167,7 +186,95 @@ export default function Header() {
     loadMaterials();
   }, []);
 
-  // Focus search input when opened
+  // Load streak
+  useEffect(() => {
+    async function loadStreak() {
+      try {
+        const session =
+          await fetchAuthSession();
+
+        const token =
+          session.tokens?.idToken?.toString();
+
+        if (!token) return;
+
+        const response = await fetch(
+          `${API_URL}/streak`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) return;
+
+        const data =
+          await response.json();
+
+        setStreak(
+          Number(data?.streak ?? 0)
+        );
+      } catch (error) {
+        console.error(
+          "Failed to load streak:",
+          error
+        );
+      }
+    }
+
+    loadStreak();
+  }, []);
+
+  // Load notifications
+  useEffect(() => {
+    async function loadNotifications() {
+      try {
+        const session =
+          await fetchAuthSession();
+
+        const token =
+          session.tokens?.idToken?.toString();
+
+        if (!token) return;
+
+        const response = await fetch(
+          `${API_URL}/notifications`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) return;
+
+        const data =
+          await response.json();
+
+        setNotifications(
+          Array.isArray(data?.notifications)
+            ? data.notifications
+            : []
+        );
+
+        setUnreadCount(
+          Number(data?.unreadCount ?? 0)
+        );
+      } catch (error) {
+        console.error(
+          "Failed to load notifications:",
+          error
+        );
+      }
+    }
+
+    loadNotifications();
+  }, []);
+
+  // Focus search
   useEffect(() => {
     if (searchOpen) {
       searchRef.current?.focus();
@@ -195,6 +302,7 @@ export default function Header() {
   function openSearch() {
     setSearchOpen(true);
     setOpen(false);
+    setNotificationsOpen(false);
   }
 
   function closeSearch() {
@@ -219,9 +327,67 @@ export default function Header() {
     closeSearch();
   }
 
+  async function markNotificationAsRead(
+    notificationId: string
+  ) {
+    try {
+      const session =
+        await fetchAuthSession();
+
+      const token =
+        session.tokens?.idToken?.toString();
+
+      if (!token) return;
+
+      const response = await fetch(
+        `${API_URL}/notifications/read`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            notificationId,
+          }),
+        }
+      );
+
+      if (!response.ok) return;
+
+      setNotifications((current) =>
+        current.map((notification) =>
+          notification.id === notificationId
+            ? {
+                ...notification,
+                read: true,
+              }
+            : notification
+        )
+      );
+
+      setUnreadCount((current) =>
+        Math.max(0, current - 1)
+      );
+    } catch (error) {
+      console.error(
+        "Failed to mark notification as read:",
+        error
+      );
+    }
+  }
+
+  function toggleNotifications() {
+    setNotificationsOpen(
+      (current) => !current
+    );
+    setOpen(false);
+  }
+
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-[#eae8e2] bg-[#fbf9f3]/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-[1200px] items-center gap-4 px-4 md:px-8">
+
         {/* Free / Premium */}
         <span
           className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
@@ -268,6 +434,7 @@ export default function Header() {
 
         {/* Right-side controls */}
         <div className="ml-auto flex items-center gap-3">
+
           {/* Streak */}
           <div className="flex items-center gap-1.5 rounded-full bg-[#eae8e2] px-3 py-2 text-sm font-semibold text-[#717a6b]">
             <span className="text-base">
@@ -275,27 +442,93 @@ export default function Header() {
             </span>
 
             <span>
-              0d streak
+              {streak}d streak
             </span>
           </div>
 
           {/* Notifications */}
-          <button
-            type="button"
-            aria-label="Notifications"
-            className="relative grid size-9 place-items-center rounded-full text-[#41493c] transition hover:bg-[#f5f3ee]"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              className="size-5"
+          <div className="relative">
+            <button
+              type="button"
+              onClick={toggleNotifications}
+              aria-label="Notifications"
+              className="relative grid size-9 place-items-center rounded-full text-[#41493c] transition hover:bg-[#f5f3ee]"
             >
-              <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
-              <path d="M10 21h4" />
-            </svg>
-          </button>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                className="size-5"
+              >
+                <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+                <path d="M10 21h4" />
+              </svg>
+
+              {unreadCount > 0 && (
+                <span className="absolute right-0 top-0 grid min-w-4 place-items-center rounded-full bg-[#468432] px-1 text-[10px] font-bold leading-4 text-white">
+                  {unreadCount > 9
+                    ? "9+"
+                    : unreadCount}
+                </span>
+              )}
+            </button>
+
+            {notificationsOpen && (
+              <div className="absolute right-0 top-11 w-80 overflow-hidden rounded-xl bg-white shadow-lg">
+
+                <div className="border-b border-[#eae8e2] px-4 py-3">
+                  <p className="text-sm font-semibold text-[#1b1c19]">
+                    Notifications
+                  </p>
+                </div>
+
+                {notifications.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-sm text-[#717a6b]">
+                    No notifications yet.
+                  </div>
+                ) : (
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.map(
+                      (notification, index) => (
+                        <button
+                          key={`${notification.id ?? "notification"}-${index}`}
+                          type="button"
+                          onClick={() =>
+                            !notification.read &&
+                            markNotificationAsRead(
+                              notification.id
+                            )
+                          }
+                          className={`w-full border-b border-[#f0eee9] px-4 py-3 text-left transition hover:bg-[#f8f7f3] ${
+                            notification.read
+                              ? "bg-white"
+                              : "bg-[#f5f9f1]"
+                          }`}
+                        >
+                          <div className="flex items-start gap-2">
+                            {!notification.read && (
+                              <span className="mt-1.5 size-2 shrink-0 rounded-full bg-[#468432]" />
+                            )}
+
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-[#1b1c19]">
+                                {notification.title}
+                              </p>
+
+                              <p className="mt-1 text-xs leading-5 text-[#717a6b]">
+                                {notification.message}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                      )
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* User Profile */}
           <div className="relative">
