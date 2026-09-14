@@ -39,31 +39,17 @@ export default function ReviewView() {
     ? params.deckId[0]
     : params.deckId;
 
-  const [deck, setDeck] =
-    useState<Deck | null>(null);
-
-  const [currentIndex, setCurrentIndex] =
-    useState(0);
-
-  const [showAnswer, setShowAnswer] =
-    useState(false);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState("");
-
-  const [savingProgress, setSavingProgress] =
-    useState(false);
-
-  const [reviewedCardIds, setReviewedCardIds] =
-    useState<string[]>([]);
+  const [deck, setDeck] = useState<Deck | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [showAnswer, setShowAnswer] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [savingProgress, setSavingProgress] = useState(false);
+  const [reviewedCardIds, setReviewedCardIds] = useState<string[]>([]);
 
   /* Token */
   async function getToken() {
-    const session =
-      await fetchAuthSession();
+    const session = await fetchAuthSession();
 
     const token =
       session.tokens?.accessToken?.toString();
@@ -78,22 +64,15 @@ export default function ReviewView() {
   }
 
   /* Study activity */
-  async function recordStudyActivity(
-    token: string
-  ) {
+  async function recordStudyActivity(token: string) {
     try {
-      await fetch(
-        `${API_BASE}/activity`,
-        {
-          method: "POST",
-          headers: {
-            Authorization:
-              `Bearer ${token}`,
-            "Content-Type":
-              "application/json",
-          },
-        }
-      );
+      await fetch(`${API_BASE}/activity`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
     } catch (error) {
       console.error(
         "Failed to record study activity:",
@@ -108,26 +87,20 @@ export default function ReviewView() {
       setLoading(true);
       setError("");
 
-      const token =
-        await getToken();
+      const token = await getToken();
 
-      const response =
-        await fetch(
-          `${API_BASE}/flashcards/${deckId}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-            cache: "no-store",
-          }
-        );
+      const response = await fetch(
+        `${API_BASE}/flashcards/${deckId}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: "no-store",
+        }
+      );
 
-      const data =
-        await response
-          .json()
-          .catch(() => ({}));
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         throw new Error(
@@ -136,19 +109,36 @@ export default function ReviewView() {
         );
       }
 
-      const apiDeck =
-        data.deck || {};
+      const apiDeck = data.deck || {};
+
+      /* Debug */
+      console.log(
+        "FLASHCARD API RESPONSE:",
+        data
+      );
 
       const apiCards =
-        Array.isArray(
-          apiDeck.cards
-        )
+        Array.isArray(apiDeck.cards)
           ? apiDeck.cards
-          : Array.isArray(
-                data.cards
-              )
+          : Array.isArray(data.cards)
             ? data.cards
             : [];
+
+      console.log(
+        "CARDS:",
+        apiCards
+      );
+
+      console.log(
+        "ACTUAL CARD COUNT:",
+        apiCards.length
+      );
+
+      /*
+       * Actual cards are the source of truth.
+       */
+      const actualTotalCards =
+        apiCards.length;
 
       const existingReviewedIds =
         Array.isArray(
@@ -161,49 +151,98 @@ export default function ReviewView() {
             ? data.reviewedCardIds
             : [];
 
+      /*
+       * Only count reviewed cards that
+       * actually belong to this deck.
+       */
+      const validCardIds = new Set(
+        apiCards
+          .map(
+            (card: Flashcard) =>
+              card.cardId
+          )
+          .filter(Boolean)
+      );
+
+      const validReviewedIds =
+        existingReviewedIds.filter(
+          (cardId: string) =>
+            validCardIds.has(cardId)
+        );
+
+      const actualReviewedCount =
+        Math.min(
+          validReviewedIds.length,
+          actualTotalCards
+        );
+
+      const actualProgress =
+        actualTotalCards > 0
+          ? Math.min(
+              100,
+              Math.round(
+                (actualReviewedCount /
+                  actualTotalCards) *
+                  100
+              )
+            )
+          : 0;
+
+      const actualCompleted =
+        actualTotalCards > 0 &&
+        actualReviewedCount >=
+          actualTotalCards;
+
       const normalizedDeck: Deck = {
         deckId:
           apiDeck.deckId ||
           deckId ||
           "",
+
         title:
           apiDeck.title ||
           "Flashcard Deck",
+
         materialName:
           apiDeck.materialName ||
           "Uploaded material",
+
         cardCount:
-          apiDeck.cardCount ||
-          apiCards.length,
-        cards: apiCards,
-        progress: Number(
-          apiDeck.progress ??
-            data.progress ??
-            0
-        ),
-        reviewedCount: Number(
-          apiDeck.reviewedCount ??
-            data.reviewedCount ??
-            existingReviewedIds.length
-        ),
-        totalCards: Number(
-          apiDeck.totalCards ??
-            data.totalCards ??
-            apiCards.length
-        ),
-        completed: Boolean(
-          apiDeck.completed ??
-            data.completed ??
-            false
-        ),
+          actualTotalCards,
+
+        cards:
+          apiCards,
+
+        progress:
+          actualProgress,
+
+        reviewedCount:
+          actualReviewedCount,
+
+        totalCards:
+          actualTotalCards,
+
+        completed:
+          actualCompleted,
+
         reviewedCardIds:
-          existingReviewedIds,
+          validReviewedIds,
       };
 
       setDeck(normalizedDeck);
 
       setReviewedCardIds(
-        existingReviewedIds
+        validReviewedIds
+      );
+
+      setCurrentIndex((current) =>
+        Math.min(
+          current,
+          Math.max(
+            0,
+            actualTotalCards - 1
+          )
+        )
       );
 
       if (apiCards.length > 0) {
@@ -294,6 +333,10 @@ export default function ReviewView() {
         );
       }
 
+      /*
+       * Add the reviewed card locally
+       * immediately after the backend confirms it.
+       */
       const newReviewedIds =
         Array.from(
           new Set([
@@ -302,48 +345,79 @@ export default function ReviewView() {
           ])
         );
 
-      const total =
+      /*
+       * The actual number of cards in
+       * the deck is always the source
+       * of truth.
+       */
+      const totalCards =
         deck.cards.length;
 
-      const reviewed =
-        Number(
-          data.reviewedCount ??
-            newReviewedIds.length
+      /*
+       * Only count IDs belonging to
+       * the current deck.
+       */
+      const deckCardIds =
+        new Set(
+          deck.cards
+            .map(
+              (item) =>
+                item.cardId
+            )
+            .filter(Boolean)
         );
 
-      const newProgress =
-        Number(
-          data.progress ??
-            (total > 0
-              ? Math.round(
-                  (reviewed / total) *
-                    100
-                )
-              : 0)
+      const validReviewedIds =
+        newReviewedIds.filter(
+          (id) =>
+            deckCardIds.has(id)
         );
+
+      const reviewedCount =
+        validReviewedIds.length;
+
+      const progress =
+        totalCards > 0
+          ? Math.min(
+              100,
+              Math.round(
+                (reviewedCount /
+                  totalCards) *
+                  100
+              )
+            )
+          : 0;
 
       const completed =
-        Boolean(
-          data.completed ??
-            newProgress >= 100
-        );
+        totalCards > 0 &&
+        reviewedCount >=
+          totalCards;
+
+      console.log(
+        "PROGRESS UPDATED:",
+        {
+          reviewedCount,
+          totalCards,
+          progress,
+          completed,
+        }
+      );
 
       setReviewedCardIds(
-        newReviewedIds
+        validReviewedIds
       );
 
       setDeck((current) =>
         current
           ? {
               ...current,
+              cardCount:
+                totalCards,
+              totalCards,
               reviewedCardIds:
-                newReviewedIds,
-              reviewedCount:
-                reviewed,
-              totalCards:
-                total,
-              progress:
-                newProgress,
+                validReviewedIds,
+              reviewedCount,
+              progress,
               completed,
             }
           : current
@@ -534,6 +608,9 @@ export default function ReviewView() {
     );
   }
 
+  /*
+   * SOURCE OF TRUTH
+   */
   const currentCard =
     deck.cards[currentIndex];
 
@@ -541,19 +618,27 @@ export default function ReviewView() {
     deck.cards.length;
 
   const reviewedCount =
-    reviewedCardIds.length;
+    Math.min(
+      reviewedCardIds.length,
+      totalCards
+    );
 
   const progress =
     totalCards > 0
-      ? Math.round(
-          (reviewedCount /
-            totalCards) *
-            100
+      ? Math.min(
+          100,
+          Math.round(
+            (reviewedCount /
+              totalCards) *
+              100
+          )
         )
       : 0;
 
   const completed =
-    progress >= 100;
+    totalCards > 0 &&
+    reviewedCount >=
+      totalCards;
 
   const currentCardReviewed =
     currentCard.cardId
@@ -591,14 +676,16 @@ export default function ReviewView() {
       <div className="mt-8 w-full max-w-3xl">
 
         <div className="flex items-center justify-between text-xs font-semibold text-[#41493c]">
+
           <span>
-            {reviewedCount} of{" "}
-            {totalCards} cards reviewed
+            Card {currentIndex + 1} of{" "}
+            {totalCards}
           </span>
 
           <span className="text-[#2d6a1b]">
             {progress}%
           </span>
+
         </div>
 
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#e4e2dd]">
@@ -611,9 +698,9 @@ export default function ReviewView() {
         </div>
 
         <div className="mt-2 flex justify-between text-[10px] text-[#717a6b]">
+
           <span>
-            Card {currentIndex + 1} of{" "}
-            {totalCards}
+            {reviewedCount}/{totalCards} reviewed
           </span>
 
           <span>
@@ -621,6 +708,7 @@ export default function ReviewView() {
               ? "All cards reviewed"
               : "Keep going"}
           </span>
+
         </div>
 
       </div>
@@ -727,9 +815,7 @@ export default function ReviewView() {
                     </p>
 
                     <p className="mt-2 text-sm leading-6 text-[#41493c]">
-                      {
-                        currentCard.explanation
-                      }
+                      {currentCard.explanation}
                     </p>
 
                   </div>
@@ -808,20 +894,29 @@ export default function ReviewView() {
 
       {/* Completion */}
       {completed && (
-        <div className="mt-8 w-full max-w-3xl rounded-2xl bg-[#eaf7e3] p-5">
+        <div className="mt-8 flex w-full max-w-3xl items-center justify-between gap-5 rounded-2xl bg-[#eaf7e3] p-5">
 
-          <p className="text-sm font-bold text-[#2d6a1b]">
-            ✓ Deck completed
-          </p>
+          <div>
+            <p className="text-sm font-bold text-[#2d6a1b]">
+              ✓ Deck completed
+            </p>
 
-          <h2 className="mt-1 text-lg font-bold">
-            You reviewed all{" "}
-            {totalCards} cards!
-          </h2>
+            <h2 className="mt-1 text-lg font-bold">
+              You reviewed all{" "}
+              {totalCards} cards!
+            </h2>
 
-          <p className="mt-1 text-sm text-[#41493c]">
-            Your quiz is now unlocked.
-          </p>
+            <p className="mt-1 text-sm text-[#41493c]">
+              Your quiz is ready.
+            </p>
+          </div>
+
+          <Link
+            href={`/flashcards/${deck.deckId}/quiz`}
+            className="shrink-0 rounded-xl bg-[#468432] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#3d752c]"
+          >
+            Take Quiz →
+          </Link>
 
         </div>
       )}
