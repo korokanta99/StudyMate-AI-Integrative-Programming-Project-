@@ -1,8 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { fetchAuthSession } from "aws-amplify/auth";
+import { useEffect, useState } from "react";
 
 import Icon from "@/components/ui/Icon";
+
+const API_URL =
+  "https://8auzzcojhh.execute-api.ap-southeast-1.amazonaws.com";
 
 const features = [
   {
@@ -29,33 +33,512 @@ const features = [
 
 type BillingPlan = "monthly" | "yearly";
 
-export default function SubscriptionView() {
-  const [plan, setPlan] =
-    useState<BillingPlan>("yearly");
+type SubscriptionData = {
+  pro?: boolean;
+  status?: string;
+  plan?: string;
+  currentPeriodEnd?: string;
+  trialEnd?: string;
+  cancelAtPeriodEnd?: boolean;
+};
 
-  const [method, setMethod] =
-    useState("Credit Card");
+export default function SubscriptionView() {
+  const [plan, setPlan] = useState<BillingPlan>("yearly");
+  const [loading, setLoading] = useState(false);
+  const [checkingSubscription, setCheckingSubscription] = useState(true);
+  const [isPro, setIsPro] = useState(false);
+  const [subscription, setSubscription] =
+    useState<SubscriptionData | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState("");
+  const [error, setError] = useState("");
 
   const isYearly = plan === "yearly";
 
   const monthlyPrice = 250;
-  const yearlyPrice = 650;
-
-  const selectedPrice = isYearly
-    ? yearlyPrice
-    : monthlyPrice;
+  const yearlyPrice = 600;
 
   const billingLabel = isYearly
-    ? "₱650/year"
-    : "₱250/month";
+    ? `₱${yearlyPrice}/year`
+    : `₱${monthlyPrice}/month`;
 
-  function handleStartTrial() {
-    // Stripe Sandbox integration will be added later.
-    console.log(
-      `Starting 7-day Pro trial with ${plan} plan`
+  useEffect(() => {
+    async function loadSubscription() {
+      try {
+        setCheckingSubscription(true);
+        setError("");
+
+        const session = await fetchAuthSession();
+
+        const token = session.tokens?.idToken?.toString();
+
+        if (!token) {
+          setIsPro(false);
+          return;
+        }
+
+        const response = await fetch(`${API_URL}/subscription`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await response.json();
+
+        console.log(
+          "SUBSCRIPTION RESPONSE:",
+          response.status,
+          JSON.stringify(data, null, 2)
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            data?.error || "Unable to check subscription."
+          );
+        }
+
+        const subscriptionData =
+          data?.subscription &&
+          typeof data.subscription === "object"
+            ? data.subscription
+            : data;
+
+        setSubscription(subscriptionData);
+
+        const backendPro =
+          subscriptionData?.pro === true ||
+          subscriptionData?.status === "active" ||
+          subscriptionData?.status === "trialing";
+
+        console.log("PRO STATUS:", backendPro);
+
+        setIsPro(backendPro);
+      } catch (err) {
+        console.error("Subscription check failed:", err);
+        setIsPro(false);
+      } finally {
+        setCheckingSubscription(false);
+      }
+    }
+
+    loadSubscription();
+  }, []);
+
+  useEffect(() => {
+    if (!subscription?.trialEnd) {
+      setTimeRemaining("");
+      return;
+    }
+
+    function updateTimer() {
+      const end = new Date(
+        subscription!.trialEnd!
+      ).getTime();
+
+      const now = Date.now();
+
+      const difference = end - now;
+
+      if (difference <= 0) {
+        setTimeRemaining("Trial ended");
+        return;
+      }
+
+      const totalSeconds = Math.floor(
+        difference / 1000
+      );
+
+      const days = Math.floor(
+        totalSeconds / 86400
+      );
+
+      const hours = Math.floor(
+        (totalSeconds % 86400) / 3600
+      );
+
+      const minutes = Math.floor(
+        (totalSeconds % 3600) / 60
+      );
+
+      const seconds = totalSeconds % 60;
+
+      setTimeRemaining(
+        `${days}d ${hours}h ${minutes}m ${seconds}s`
+      );
+    }
+
+    updateTimer();
+
+    const interval = setInterval(
+      updateTimer,
+      1000
+    );
+
+    return () => clearInterval(interval);
+  }, [subscription?.trialEnd]);
+
+  async function handleStartTrial() {
+    try {
+      setLoading(true);
+      setError("");
+
+      const session = await fetchAuthSession();
+
+      const token = session.tokens?.idToken?.toString();
+
+      if (!token) {
+        setError(
+          "Your session has expired. Please log in again."
+        );
+        return;
+      }
+
+      const response = await fetch(
+        `${API_URL}/billing/checkout`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            plan,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      console.log(
+        "CHECKOUT RESPONSE:",
+        response.status,
+        data
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            "Unable to start your Pro trial."
+        );
+      }
+
+      if (!data?.checkoutUrl) {
+        throw new Error(
+          "Stripe Checkout URL was not returned."
+        );
+      }
+
+      window.location.href =
+        data.checkoutUrl;
+    } catch (err) {
+      console.error(
+        "Stripe checkout failed:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleManageMembership() {
+    try {
+      setLoading(true);
+      setError("");
+
+      const session = await fetchAuthSession();
+
+      const token = session.tokens?.idToken?.toString();
+
+      if (!token) {
+        setError(
+          "Your session has expired. Please log in again."
+        );
+        return;
+      }
+
+      const response = await fetch(
+        `${API_URL}/billing/portal`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      console.log(
+        "PORTAL RESPONSE:",
+        response.status,
+        data
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            "Unable to open membership management."
+        );
+      }
+
+      if (!data?.portalUrl) {
+        throw new Error(
+          "Stripe Customer Portal URL was not returned."
+        );
+      }
+
+      window.location.href =
+        data.portalUrl;
+    } catch (err) {
+      console.error(
+        "Stripe portal failed:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to open membership management."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (checkingSubscription) {
+    return (
+      <div className="relative overflow-hidden rounded-3xl bg-white p-6 shadow-[0_4px_24px_rgba(70,132,50,.08)] sm:p-8">
+        <div className="absolute -right-36 -top-36 size-96 rounded-full bg-[#aff594]/20 blur-3xl" />
+
+        <div className="relative flex min-h-[500px] items-center justify-center">
+          <div className="text-center">
+            <div className="mx-auto size-8 animate-spin rounded-full border-4 border-[#d8e8d0] border-t-[#468432]" />
+
+            <p className="mt-4 text-sm text-[#717a6b]">
+              Checking your membership...
+            </p>
+          </div>
+        </div>
+      </div>
     );
   }
 
+  /*
+   * PRO MEMBER
+   */
+  if (isPro) {
+    return (
+      <div className="relative overflow-hidden rounded-3xl bg-white p-6 shadow-[0_4px_24px_rgba(70,132,50,.08)] sm:p-8">
+        <div className="absolute -right-36 -top-36 size-96 rounded-full bg-[#aff594]/20 blur-3xl" />
+
+        <div className="relative mx-auto max-w-3xl text-center">
+          {/* Status */}
+          <span className="rounded-full bg-[#b4f48a]/50 px-3 py-1 text-sm font-semibold text-[#215100]">
+            ✦ StudyMate AI Pro Member
+          </span>
+
+          {/* Pro icon */}
+          <div className="mx-auto mt-8 grid size-20 place-items-center rounded-full bg-[#468432] text-3xl font-bold text-white">
+            ✓
+          </div>
+
+          {/* Heading */}
+          <h1 className="mt-5 text-3xl font-bold tracking-tight sm:text-[40px]">
+            You&apos;re already{" "}
+            <span className="text-[#2d6a1b]">
+              Pro
+            </span>
+          </h1>
+
+          <p className="mx-auto mt-3 max-w-xl text-lg text-[#41493c]">
+            Your StudyMate AI Pro membership is active.
+            You already have access to all Pro study
+            features.
+          </p>
+
+          {/* Membership */}
+          <div className="mx-auto mt-8 max-w-xl rounded-2xl bg-[#f5f3ee] p-6 text-left">
+            <div className="flex items-center justify-between border-b border-[#c1c9b8]/30 pb-4">
+              <div className="flex items-center gap-3">
+                <span className="grid size-12 place-items-center rounded-xl bg-[#468432] text-white">
+                  ★
+                </span>
+
+                <div>
+                  <p className="font-semibold">
+                    StudyMate Pro
+                  </p>
+
+                  <p className="text-sm text-[#717a6b]">
+                    Premium membership
+                  </p>
+                </div>
+              </div>
+
+              <span className="rounded-full bg-[#b4f48a] px-3 py-1 text-[11px] font-bold text-[#215100]">
+                {subscription?.cancelAtPeriodEnd
+                  ? "CANCELING"
+                  : "PRO ACTIVE"}
+              </span>
+            </div>
+
+            <div className="mt-5 space-y-4 text-sm">
+              <div className="flex justify-between">
+                <span className="text-[#717a6b]">
+                  Plan
+                </span>
+
+                <span className="font-semibold capitalize">
+                  {subscription?.plan ||
+                    "Pro"}
+                </span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-[#717a6b]">
+                  Status
+                </span>
+
+                <span className="font-semibold capitalize text-[#2d6a1b]">
+                  {subscription?.status ||
+                    "Active"}
+                </span>
+              </div>
+
+              {subscription?.trialEnd && (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-[#717a6b]">
+                      Trial ends
+                    </span>
+
+                    <span className="font-semibold">
+                      {new Date(
+                        subscription.trialEnd
+                      ).toLocaleDateString()}
+                    </span>
+                  </div>
+
+                  {!subscription.cancelAtPeriodEnd &&
+                    timeRemaining && (
+                      <div className="mt-4 rounded-xl bg-[#b4f48a]/30 p-4 text-center">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[#356b10]">
+                          ⏳ Trial time remaining
+                        </p>
+
+                        <p className="mt-1 text-2xl font-bold text-[#215100]">
+                          {timeRemaining}
+                        </p>
+                      </div>
+                    )}
+                </>
+              )}
+
+              {subscription?.currentPeriodEnd && (
+                <div className="flex justify-between">
+                  <span className="text-[#717a6b]">
+                    Current period ends
+                  </span>
+
+                  <span className="font-semibold">
+                    {new Date(
+                      subscription.currentPeriodEnd
+                    ).toLocaleDateString()}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {subscription?.cancelAtPeriodEnd && (
+              <div className="mt-5 rounded-xl bg-amber-50 p-4">
+                <p className="font-semibold text-amber-800">
+                  ⚠️ Cancellation scheduled
+                </p>
+
+                <p className="mt-1 text-sm text-amber-700">
+                  Your Pro membership will remain
+                  available until the end of your
+                  current trial or billing period.
+                </p>
+
+                {subscription.currentPeriodEnd && (
+                  <p className="mt-2 text-sm font-semibold text-amber-800">
+                    Access ends{" "}
+                    {new Date(
+                      subscription.currentPeriodEnd
+                    ).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Pro features */}
+          <div className="mt-8 rounded-2xl bg-[#f5f3ee] p-6 text-left">
+            <h2 className="text-lg font-semibold">
+              Your Pro features
+            </h2>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {features.map((feature) => (
+                <div
+                  key={feature.title}
+                  className="rounded-xl bg-white p-4 shadow-sm"
+                >
+                  <span className="text-[#2d6a1b]">
+                    {feature.icon}
+                  </span>
+
+                  <b className="ml-2 text-sm">
+                    {feature.title}
+                  </b>
+
+                  <p className="mt-1 text-sm text-[#41493c]">
+                    {feature.description}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="mx-auto mt-6 max-w-xl rounded-xl bg-red-50 p-3 text-left text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          {/* Manage membership */}
+          <button
+            type="button"
+            onClick={handleManageMembership}
+            disabled={loading}
+            className="mt-8 rounded-xl bg-[#f0eee8] px-5 py-3 text-sm font-semibold text-[#1b1c19] transition hover:bg-[#e5e2d9] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading
+              ? "Opening membership..."
+              : "Manage Membership"}
+          </button>
+
+          <p className="mt-3 text-xs text-[#717a6b]">
+            Update your plan, payment method, or
+            subscription through Stripe.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  /*
+   * FREE MEMBER
+   */
   return (
     <div className="relative overflow-hidden rounded-3xl bg-white p-6 shadow-[0_4px_24px_rgba(70,132,50,.08)] sm:p-8">
       {/* Decorative background */}
@@ -86,6 +569,7 @@ export default function SubscriptionView() {
           <button
             type="button"
             onClick={() => setPlan("monthly")}
+            disabled={loading}
             className={`rounded-full px-4 py-2 text-sm ${
               !isYearly
                 ? "bg-white text-[#2d6a1b] shadow"
@@ -98,13 +582,14 @@ export default function SubscriptionView() {
           <button
             type="button"
             onClick={() => setPlan("yearly")}
+            disabled={loading}
             className={`rounded-full px-4 py-2 text-sm font-semibold ${
               isYearly
                 ? "bg-white text-[#2d6a1b] shadow"
                 : "text-[#41493c]"
             }`}
           >
-            Yearly · ₱650
+            Yearly · ₱600
           </button>
         </div>
       </div>
@@ -159,74 +644,33 @@ export default function SubscriptionView() {
               </span>
             </div>
 
-            {/* Payment options */}
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              {["Credit Card", "Mastercard"].map(
-                (paymentMethod) => (
-                  <button
-                    type="button"
-                    key={paymentMethod}
-                    onClick={() =>
-                      setMethod(paymentMethod)
-                    }
-                    className={`rounded-xl p-3 text-xs font-semibold ${
-                      method === paymentMethod
-                        ? "bg-[#f5f3ee] text-[#2d6a1b] shadow-sm"
-                        : "bg-white text-[#41493c]"
-                    }`}
-                  >
-                    {paymentMethod}
-                  </button>
-                )
-              )}
-            </div>
+            <div className="mt-4 rounded-xl bg-[#f5f3ee] p-4">
+              <div className="flex items-center gap-3">
+                <div className="grid size-10 place-items-center rounded-lg bg-white font-bold shadow-sm">
+                  💳
+                </div>
 
-            {/* Card details */}
-            <div className="mt-5 space-y-3">
-              <label className="block text-sm font-semibold">
-                Cardholder Name
+                <div>
+                  <p className="text-sm font-semibold">
+                    Credit or Debit Card
+                  </p>
 
-                <input
-                  defaultValue="Alex Student"
-                  className="mt-1 w-full rounded-xl bg-[#f5f3ee] p-3 font-normal outline-none focus:ring-2 focus:ring-[#468432]"
-                />
-              </label>
-
-              <label className="block text-sm font-semibold">
-                Card Number
-
-                <input
-                  placeholder="•••• •••• •••• ••••"
-                  inputMode="numeric"
-                  className="mt-1 w-full rounded-xl bg-[#f5f3ee] p-3 font-normal outline-none focus:ring-2 focus:ring-[#468432]"
-                />
-              </label>
-
-              <div className="grid grid-cols-2 gap-4">
-                <label className="text-sm font-semibold">
-                  Expiration
-
-                  <input
-                    placeholder="MM/YY"
-                    className="mt-1 w-full rounded-xl bg-[#f5f3ee] p-3 font-normal outline-none focus:ring-2 focus:ring-[#468432]"
-                  />
-                </label>
-
-                <label className="text-sm font-semibold">
-                  CVC / CVV
-
-                  <input
-                    placeholder="•••"
-                    inputMode="numeric"
-                    className="mt-1 w-full rounded-xl bg-[#f5f3ee] p-3 font-normal outline-none focus:ring-2 focus:ring-[#468432]"
-                  />
-                </label>
+                  <p className="text-xs text-[#717a6b]">
+                    Securely processed by Stripe
+                  </p>
+                </div>
               </div>
             </div>
+
+            <p className="mt-4 text-xs leading-5 text-[#717a6b]">
+              Your card details are entered securely on
+              Stripe Checkout. StudyMate does not store
+              your card number, expiration date, or CVC.
+            </p>
           </section>
         </div>
 
-        {/* Right column — checkout summary */}
+        {/* Right column */}
         <aside className="h-fit rounded-2xl bg-[#f5f3ee] p-6 shadow-sm lg:col-span-5">
           {/* Plan summary */}
           <div className="flex gap-3 border-b border-[#c1c9b8]/30 pb-4">
@@ -270,18 +714,30 @@ export default function SubscriptionView() {
             <span>₱0</span>
           </div>
 
+          {/* Error */}
+          {error && (
+            <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
           {/* Trial button */}
           <button
             type="button"
             onClick={handleStartTrial}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#468432] py-3 font-semibold text-white transition hover:bg-[#2d6a1b]"
+            disabled={loading}
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#468432] py-3 font-semibold text-white transition hover:bg-[#2d6a1b] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Start 7-Day Free Trial
+            {loading
+              ? "Opening secure checkout..."
+              : "Start 7-Day Free Trial"}
 
-            <Icon
-              name="arrow"
-              className="size-4"
-            />
+            {!loading && (
+              <Icon
+                name="arrow"
+                className="size-4"
+              />
+            )}
           </button>
 
           {/* Trial terms */}
@@ -290,7 +746,7 @@ export default function SubscriptionView() {
             anytime during your 7-day trial to avoid
             being charged. Your selected{" "}
             {isYearly
-              ? "₱650/year"
+              ? "₱600/year"
               : "₱250/month"}{" "}
             plan starts after the trial if you do not
             cancel.
