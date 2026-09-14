@@ -39,9 +39,7 @@ function getMasteryLabel() {
   return "New deck";
 }
 
-function getMasteryCount(
-  deck: FlashcardDeck
-) {
+function getMasteryCount(deck: FlashcardDeck) {
   return `0/${deck.cardCount} known`;
 }
 
@@ -75,36 +73,26 @@ function FlashcardCard({
         {/* Card header */}
         <div className="flex items-start justify-between">
           <span className="grid size-8 place-items-center rounded-lg bg-[#f0eee8] text-[#2d6a1b]">
-            <Icon
-              name="card"
-              className="size-5"
-            />
+            <Icon name="card" className="size-5" />
           </span>
 
           <div className="relative">
             <button
               type="button"
-              onClick={() =>
-                onToggleMenu(deck.deckId)
-              }
+              onClick={() => onToggleMenu(deck.deckId)}
               className="grid size-9 place-items-center rounded-lg text-[#41493c] transition hover:bg-[#f5f3ee]"
               aria-label="Flashcard deck options"
               aria-expanded={menuOpen}
             >
-              <span className="text-xl leading-none">
-                ⋮
-              </span>
+              <span className="text-xl leading-none">⋮</span>
             </button>
 
             {menuOpen && (
               <div className="absolute right-0 top-10 z-30 w-44 rounded-xl border border-[#e3dfd7] bg-white p-1.5 shadow-[0_12px_35px_rgba(0,0,0,.12)]">
-
                 {/* Review */}
                 <button
                   type="button"
-                  onClick={() =>
-                    onReview(deck.deckId)
-                  }
+                  onClick={() => onReview(deck.deckId)}
                   className="flex w-full items-center rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[#41493c] transition hover:bg-[#f5f3ee]"
                 >
                   ▶ Review
@@ -113,14 +101,11 @@ function FlashcardCard({
                 {/* Delete */}
                 <button
                   type="button"
-                  onClick={() =>
-                    onDelete(deck)
-                  }
+                  onClick={() => onDelete(deck)}
                   className="flex w-full items-center rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-[#dc2626] transition hover:bg-[#fff1f1]"
                 >
                   🗑 Delete
                 </button>
-
               </div>
             )}
           </div>
@@ -134,9 +119,7 @@ function FlashcardCard({
         </div>
 
         {/* Title */}
-        <h2 className="mt-5 text-lg font-semibold">
-          {deck.title}
-        </h2>
+        <h2 className="mt-5 text-lg font-semibold">{deck.title}</h2>
 
         <p className="mt-1 text-sm text-[#41493c]">
           Generated from {deck.materialName}
@@ -145,13 +128,9 @@ function FlashcardCard({
         {/* Mastery */}
         <div className="mt-5 rounded-xl bg-[#f5f3ee] p-3">
           <div className="flex justify-between text-[11px] font-bold">
-            <span>
-              {getMasteryLabel()}
-            </span>
+            <span>{getMasteryLabel()}</span>
 
-            <span className="text-[#2d6a1b]">
-              {getMasteryCount(deck)}
-            </span>
+            <span className="text-[#2d6a1b]">{getMasteryCount(deck)}</span>
           </div>
 
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#e4e2dd]">
@@ -173,9 +152,7 @@ function FlashcardCard({
 
         <button
           type="button"
-          onClick={() =>
-            onReview(deck.deckId)
-          }
+          onClick={() => onReview(deck.deckId)}
           className={`rounded-xl px-4 py-2 text-sm font-semibold ${getButtonClass()}`}
         >
           ▶ Review
@@ -201,9 +178,7 @@ function SearchBar({
 
       <input
         value={value}
-        onChange={(event) =>
-          onChange(event.target.value)
-        }
+        onChange={(event) => onChange(event.target.value)}
         placeholder="Search flashcard decks..."
         className="w-full rounded-xl bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-[#468432]"
       />
@@ -214,23 +189,18 @@ function SearchBar({
 export default function FlashcardsView() {
   const router = useRouter();
 
-  const [searchQuery, setSearchQuery] =
-    useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [selectedMaterialId, setSelectedMaterialId] =
     useState("all");
 
-  const [decks, setDecks] =
-    useState<FlashcardDeck[]>([]);
+  const [decks, setDecks] = useState<FlashcardDeck[]>([]);
 
-  const [materials, setMaterials] =
-    useState<Material[]>([]);
+  const [materials, setMaterials] = useState<Material[]>([]);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [loading, setLoading] = useState(true);
 
-  const [generating, setGenerating] =
-    useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const [showGenerateModal, setShowGenerateModal] =
     useState(false);
@@ -241,15 +211,14 @@ export default function FlashcardsView() {
   const [deleteTarget, setDeleteTarget] =
     useState<FlashcardDeck | null>(null);
 
-  const [error, setError] =
-    useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  const [error, setError] = useState("");
 
   async function getToken() {
-    const session =
-      await fetchAuthSession();
+    const session = await fetchAuthSession();
 
-    const token =
-      session.tokens?.accessToken?.toString();
+    const token = session.tokens?.accessToken?.toString();
 
     if (!token) {
       throw new Error(
@@ -265,28 +234,20 @@ export default function FlashcardsView() {
       setLoading(true);
       setError("");
 
-      const token =
-        await getToken();
+      const token = await getToken();
 
-      const response =
-        await fetch(
-          `${API_BASE}/flashcards`,
-          {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-            cache: "no-store",
-          }
-        );
+      const response = await fetch(`${API_BASE}/flashcards`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+      });
 
-      const data =
-        await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.message ||
-            "Unable to load flashcard decks."
+          data.message || "Unable to load flashcard decks."
         );
       }
 
@@ -310,28 +271,20 @@ export default function FlashcardsView() {
 
   async function loadMaterials() {
     try {
-      const token =
-        await getToken();
+      const token = await getToken();
 
-      const response =
-        await fetch(
-          `${API_BASE}/materials`,
-          {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-            cache: "no-store",
-          }
-        );
+      const response = await fetch(`${API_BASE}/materials`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+      });
 
-      const data =
-        await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.message ||
-            "Unable to load materials."
+          data.message || "Unable to load materials."
         );
       }
 
@@ -359,35 +312,28 @@ export default function FlashcardsView() {
     setShowGenerateModal(true);
   }
 
-  async function handleGenerate(
-    materialId: string
-  ) {
+  async function handleGenerate(materialId: string) {
     try {
       setGenerating(true);
       setError("");
 
-      const token =
-        await getToken();
+      const token = await getToken();
 
-      const response =
-        await fetch(
-          `${API_BASE}/flashcards/generate`,
-          {
-            method: "POST",
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              materialId,
-            }),
-          }
-        );
+      const response = await fetch(
+        `${API_BASE}/flashcards/generate`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            materialId,
+          }),
+        }
+      );
 
-      const data =
-        await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -413,73 +359,92 @@ export default function FlashcardsView() {
   }
 
   /* Delete */
-  function handleDelete(
-    deck: FlashcardDeck
-  ) {
+  function handleDelete(deck: FlashcardDeck) {
     setOpenMenuId(null);
     setDeleteTarget(deck);
+    setError("");
   }
 
-  /* Frontend only */
-  function confirmDelete() {
-    if (!deleteTarget) {
+  async function confirmDelete() {
+    if (!deleteTarget || deleting) {
       return;
     }
 
-    setDecks((current) =>
-      current.filter(
-        (deck) =>
-          deck.deckId !==
-          deleteTarget.deckId
-      )
-    );
+    try {
+      setDeleting(true);
+      setError("");
 
-    setDeleteTarget(null);
+      const token = await getToken();
+
+      const response = await fetch(
+        `${API_BASE}/flashcards/${deleteTarget.deckId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            "Unable to delete flashcard deck."
+        );
+      }
+
+      setDecks((current) =>
+        current.filter(
+          (deck) =>
+            deck.deckId !== deleteTarget.deckId
+        )
+      );
+
+      setDeleteTarget(null);
+    } catch (err) {
+      console.error(err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to delete flashcard deck."
+      );
+    } finally {
+      setDeleting(false);
+    }
   }
 
   useEffect(() => {
     loadDecks();
   }, []);
 
-  const filteredDecks =
-    useMemo(() => {
-      const query =
-        searchQuery
-          .trim()
-          .toLowerCase();
+  const filteredDecks = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
 
-      return decks.filter((deck) => {
-        const matchesSearch =
-          !query ||
-          deck.title
-            .toLowerCase()
-            .includes(query) ||
-          deck.materialName
-            .toLowerCase()
-            .includes(query);
+    return decks.filter((deck) => {
+      const matchesSearch =
+        !query ||
+        deck.title.toLowerCase().includes(query) ||
+        deck.materialName.toLowerCase().includes(query);
 
-        const matchesMaterial =
-          selectedMaterialId === "all" ||
-          deck.materialId ===
-            selectedMaterialId;
+      const matchesMaterial =
+        selectedMaterialId === "all" ||
+        deck.materialId === selectedMaterialId;
 
-        return (
-          matchesSearch &&
-          matchesMaterial
-        );
-      });
-    }, [
-      decks,
-      searchQuery,
-      selectedMaterialId,
-    ]);
+      return matchesSearch && matchesMaterial;
+    });
+  }, [
+    decks,
+    searchQuery,
+    selectedMaterialId,
+  ]);
 
-  const totalCards =
-    decks.reduce(
-      (total, deck) =>
-        total + deck.cardCount,
-      0
-    );
+  const totalCards = decks.reduce(
+    (total, deck) => total + deck.cardCount,
+    0
+  );
 
   return (
     <>
@@ -502,9 +467,7 @@ export default function FlashcardsView() {
 
         <button
           type="button"
-          onClick={
-            handleOpenGenerate
-          }
+          onClick={handleOpenGenerate}
           className="rounded-xl bg-[#ffdcbe] px-5 py-3 text-sm font-semibold text-[#2c1600]"
         >
           ✦ Generate from Material
@@ -522,40 +485,26 @@ export default function FlashcardsView() {
       <div className="mt-7 flex flex-col gap-3 rounded-xl bg-[#f0eee8] p-4 sm:flex-row">
         <SearchBar
           value={searchQuery}
-          onChange={
-            setSearchQuery
-          }
+          onChange={setSearchQuery}
         />
 
         <select
-          value={
-            selectedMaterialId
-          }
+          value={selectedMaterialId}
           onChange={(event) =>
-            setSelectedMaterialId(
-              event.target.value
-            )
+            setSelectedMaterialId(event.target.value)
           }
           className="rounded-xl bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-[#468432]"
         >
-          <option value="all">
-            All materials
-          </option>
+          <option value="all">All materials</option>
 
-          {materials.map(
-            (material) => (
-              <option
-                key={
-                  material.materialId
-                }
-                value={
-                  material.materialId
-                }
-              >
-                {material.name}
-              </option>
-            )
-          )}
+          {materials.map((material) => (
+            <option
+              key={material.materialId}
+              value={material.materialId}
+            >
+              {material.name}
+            </option>
+          ))}
         </select>
 
         <span className="rounded-full bg-white px-3 py-2 text-sm font-semibold text-[#2d6a1b]">
@@ -572,46 +521,31 @@ export default function FlashcardsView() {
         </div>
       ) : filteredDecks.length > 0 ? (
         <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {filteredDecks.map(
-            (deck) => (
-              <FlashcardCard
-                key={deck.deckId}
-                deck={deck}
-                menuOpen={
-                  openMenuId ===
-                  deck.deckId
-                }
-                onToggleMenu={(
-                  deckId
-                ) =>
-                  setOpenMenuId(
-                    openMenuId ===
-                      deckId
-                      ? null
-                      : deckId
-                  )
-                }
-                onReview={(
-                  deckId
-                ) =>
-                  router.push(
-                    `/flashcards/${deckId}`
-                  )
-                }
-                onDelete={
-                  handleDelete
-                }
-              />
-            )
-          )}
+          {filteredDecks.map((deck) => (
+            <FlashcardCard
+              key={deck.deckId}
+              deck={deck}
+              menuOpen={openMenuId === deck.deckId}
+              onToggleMenu={(deckId) =>
+                setOpenMenuId(
+                  openMenuId === deckId
+                    ? null
+                    : deckId
+                )
+              }
+              onReview={(deckId) =>
+                router.push(
+                  `/flashcards/${deckId}`
+                )
+              }
+              onDelete={handleDelete}
+            />
+          ))}
         </div>
       ) : (
         <div className="mt-6 rounded-2xl bg-white p-10 text-center shadow-sm">
           <div className="mx-auto grid size-12 place-items-center rounded-xl bg-[#f0eee8] text-[#2d6a1b]">
-            <Icon
-              name="card"
-              className="size-6"
-            />
+            <Icon name="card" className="size-6" />
           </div>
 
           <h2 className="mt-4 font-semibold">
@@ -627,9 +561,7 @@ export default function FlashcardsView() {
 
           <button
             type="button"
-            onClick={
-              handleOpenGenerate
-            }
+            onClick={handleOpenGenerate}
             className="mt-5 rounded-xl bg-[#468432] px-5 py-2.5 text-sm font-semibold text-white"
           >
             ✦ Generate Flashcards
@@ -639,7 +571,6 @@ export default function FlashcardsView() {
 
       {/* Bottom Information */}
       <div className="mt-8 grid gap-5 lg:grid-cols-3">
-
         {/* Sync Information */}
         <div className="rounded-2xl bg-[#f0eee8] p-5 lg:col-span-2">
           <b className="text-[#356b10]">
@@ -665,9 +596,7 @@ export default function FlashcardsView() {
           </span>
 
           <div>
-            <b>
-              Weekly Goal Progress
-            </b>
+            <b>Weekly Goal Progress</b>
 
             <p className="text-sm text-[#41493c]">
               No cards retained yet
@@ -679,11 +608,8 @@ export default function FlashcardsView() {
       {/* Generate Modal */}
       {showGenerateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
-
             <div className="flex items-start justify-between gap-4">
-
               <div>
                 <h2 className="text-xl font-bold">
                   Generate Flashcards
@@ -699,19 +625,15 @@ export default function FlashcardsView() {
               <button
                 type="button"
                 onClick={() =>
-                  setShowGenerateModal(
-                    false
-                  )
+                  setShowGenerateModal(false)
                 }
                 className="rounded-lg px-2 py-1 text-lg text-[#717a6b] hover:bg-[#f5f3ee]"
               >
                 ×
               </button>
-
             </div>
 
             <div className="mt-5 max-h-80 space-y-2 overflow-y-auto">
-
               {materials.length === 0 ? (
                 <div className="rounded-xl bg-[#f5f3ee] p-5 text-center">
                   <p className="text-sm text-[#41493c]">
@@ -720,59 +642,49 @@ export default function FlashcardsView() {
                   </p>
                 </div>
               ) : (
-                materials.map(
-                  (material) => {
-                    const hasText =
-                      Boolean(
-                        material.extractedText?.trim()
-                      );
+                materials.map((material) => {
+                  const hasText = Boolean(
+                    material.extractedText?.trim()
+                  );
 
-                    return (
-                      <div
-                        key={
-                          material.materialId
-                        }
-                        className="flex items-center justify-between gap-3 rounded-xl border border-[#e4e2dd] p-4"
-                      >
+                  return (
+                    <div
+                      key={material.materialId}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-[#e4e2dd] p-4"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold">
+                          {material.name}
+                        </p>
 
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">
-                            {
-                              material.name
-                            }
-                          </p>
-
-                          <p className="mt-1 text-xs text-[#717a6b]">
-                            {material.pageCount
-                              ? `${material.pageCount} pages`
-                              : "Uploaded material"}
-                          </p>
-                        </div>
-
-                        <button
-                          type="button"
-                          disabled={
-                            !hasText ||
-                            generating
-                          }
-                          onClick={() =>
-                            handleGenerate(
-                              material.materialId
-                            )
-                          }
-                          className="shrink-0 rounded-lg bg-[#468432] px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          {generating
-                            ? "Generating..."
-                            : "Generate"}
-                        </button>
-
+                        <p className="mt-1 text-xs text-[#717a6b]">
+                          {material.pageCount
+                            ? `${material.pageCount} pages`
+                            : "Uploaded material"}
+                        </p>
                       </div>
-                    );
-                  }
-                )
-              )}
 
+                      <button
+                        type="button"
+                        disabled={
+                          !hasText ||
+                          generating
+                        }
+                        onClick={() =>
+                          handleGenerate(
+                            material.materialId
+                          )
+                        }
+                        className="shrink-0 rounded-lg bg-[#468432] px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {generating
+                          ? "Generating..."
+                          : "Generate"}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
@@ -781,11 +693,8 @@ export default function FlashcardsView() {
       {/* Delete Confirmation */}
       {deleteTarget && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4">
-
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(0,0,0,.2)]">
-
             <div className="flex items-start gap-4">
-
               <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#fff1f1] text-[#dc2626]">
                 <span className="text-lg">
                   🗑
@@ -798,47 +707,38 @@ export default function FlashcardsView() {
                 </h2>
 
                 <p className="mt-1 text-sm leading-6 text-[#41493c]">
-                  Delete "
-                  {deleteTarget.title}
-                  "?
+                  Delete "{deleteTarget.title}"?
                 </p>
 
                 <p className="mt-2 text-xs leading-5 text-[#717a6b]">
-                  This will remove the deck
-                  from this page. The
-                  permanent database deletion
-                  will be connected next.
+                  This will permanently delete
+                  this flashcard deck and its
+                  cards.
                 </p>
               </div>
-
             </div>
 
             <div className="mt-6 flex justify-end gap-3">
-
               <button
                 type="button"
+                disabled={deleting}
                 onClick={() =>
-                  setDeleteTarget(
-                    null
-                  )
+                  setDeleteTarget(null)
                 }
-                className="rounded-xl border border-[#e3dfd7] px-4 py-2.5 text-sm font-semibold text-[#41493c] transition hover:bg-[#f5f3ee]"
+                className="rounded-xl border border-[#e3dfd7] px-4 py-2.5 text-sm font-semibold text-[#41493c] transition hover:bg-[#f5f3ee] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancel
               </button>
 
               <button
                 type="button"
-                onClick={
-                  confirmDelete
-                }
-                className="rounded-xl bg-[#dc2626] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#b91c1c]"
+                disabled={deleting}
+                onClick={confirmDelete}
+                className="rounded-xl bg-[#dc2626] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Delete
+                {deleting ? "Deleting..." : "Delete"}
               </button>
-
             </div>
-
           </div>
         </div>
       )}
