@@ -25,6 +25,11 @@ type Deck = {
   materialName: string;
   cardCount: number;
   cards: Flashcard[];
+  progress?: number;
+  reviewedCount?: number;
+  totalCards?: number;
+  completed?: boolean;
+  reviewedCardIds?: string[];
 };
 
 export default function ReviewView() {
@@ -49,12 +54,19 @@ export default function ReviewView() {
   const [error, setError] =
     useState("");
 
+  const [savingProgress, setSavingProgress] =
+    useState(false);
+
+  const [reviewedCardIds, setReviewedCardIds] =
+    useState<string[]>([]);
+
+  /* Token */
   async function getToken() {
     const session =
       await fetchAuthSession();
 
     const token =
-      session.tokens?.idToken?.toString();
+      session.tokens?.accessToken?.toString();
 
     if (!token) {
       throw new Error(
@@ -65,6 +77,7 @@ export default function ReviewView() {
     return token;
   }
 
+  /* Study activity */
   async function recordStudyActivity(
     token: string
   ) {
@@ -89,6 +102,7 @@ export default function ReviewView() {
     }
   }
 
+  /* Load deck */
   async function loadDeck() {
     try {
       setLoading(true);
@@ -122,10 +136,6 @@ export default function ReviewView() {
         );
       }
 
-      /*
-       * API may return cards either inside
-       * deck.cards or as data.cards.
-       */
       const apiDeck =
         data.deck || {};
 
@@ -138,6 +148,17 @@ export default function ReviewView() {
                 data.cards
               )
             ? data.cards
+            : [];
+
+      const existingReviewedIds =
+        Array.isArray(
+          apiDeck.reviewedCardIds
+        )
+          ? apiDeck.reviewedCardIds
+          : Array.isArray(
+                data.reviewedCardIds
+              )
+            ? data.reviewedCardIds
             : [];
 
       const normalizedDeck: Deck = {
@@ -155,11 +176,36 @@ export default function ReviewView() {
           apiDeck.cardCount ||
           apiCards.length,
         cards: apiCards,
+        progress: Number(
+          apiDeck.progress ??
+            data.progress ??
+            0
+        ),
+        reviewedCount: Number(
+          apiDeck.reviewedCount ??
+            data.reviewedCount ??
+            existingReviewedIds.length
+        ),
+        totalCards: Number(
+          apiDeck.totalCards ??
+            data.totalCards ??
+            apiCards.length
+        ),
+        completed: Boolean(
+          apiDeck.completed ??
+            data.completed ??
+            false
+        ),
+        reviewedCardIds:
+          existingReviewedIds,
       };
 
       setDeck(normalizedDeck);
 
-      // Opening a real deck counts as study activity.
+      setReviewedCardIds(
+        existingReviewedIds
+      );
+
       if (apiCards.length > 0) {
         await recordStudyActivity(
           token
@@ -187,6 +233,160 @@ export default function ReviewView() {
     }
   }, [deckId]);
 
+  /* Save progress */
+  async function markCardReviewed(
+    card: Flashcard
+  ) {
+    if (
+      !deck ||
+      !card.cardId ||
+      savingProgress
+    ) {
+      return;
+    }
+
+    const cardId =
+      card.cardId;
+
+    if (
+      reviewedCardIds.includes(
+        cardId
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setSavingProgress(true);
+      setError("");
+
+      const token =
+        await getToken();
+
+      const response =
+        await fetch(
+          `${API_BASE}/flashcards/progress`,
+          {
+            method: "POST",
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              deckId:
+                deck.deckId,
+              cardId,
+            }),
+          }
+        );
+
+      const data =
+        await response
+          .json()
+          .catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            "Unable to save flashcard progress."
+        );
+      }
+
+      const newReviewedIds =
+        Array.from(
+          new Set([
+            ...reviewedCardIds,
+            cardId,
+          ])
+        );
+
+      const total =
+        deck.cards.length;
+
+      const reviewed =
+        Number(
+          data.reviewedCount ??
+            newReviewedIds.length
+        );
+
+      const newProgress =
+        Number(
+          data.progress ??
+            (total > 0
+              ? Math.round(
+                  (reviewed / total) *
+                    100
+                )
+              : 0)
+        );
+
+      const completed =
+        Boolean(
+          data.completed ??
+            newProgress >= 100
+        );
+
+      setReviewedCardIds(
+        newReviewedIds
+      );
+
+      setDeck((current) =>
+        current
+          ? {
+              ...current,
+              reviewedCardIds:
+                newReviewedIds,
+              reviewedCount:
+                reviewed,
+              totalCards:
+                total,
+              progress:
+                newProgress,
+              completed,
+            }
+          : current
+      );
+    } catch (err) {
+      console.error(
+        "Failed to save flashcard progress:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to save flashcard progress."
+      );
+    } finally {
+      setSavingProgress(false);
+    }
+  }
+
+  /* Reveal answer */
+  async function revealAnswer() {
+    if (!deck) {
+      return;
+    }
+
+    setShowAnswer(true);
+
+    await markCardReviewed(
+      deck.cards[currentIndex]
+    );
+  }
+
+  /* Flip */
+  function handleCardClick() {
+    if (showAnswer) {
+      setShowAnswer(false);
+    } else {
+      revealAnswer();
+    }
+  }
+
+  /* Next */
   function handleNext() {
     if (!deck) {
       return;
@@ -204,6 +404,7 @@ export default function ReviewView() {
     }
   }
 
+  /* Previous */
   function handlePrevious() {
     if (currentIndex > 0) {
       setCurrentIndex(
@@ -214,6 +415,7 @@ export default function ReviewView() {
     }
   }
 
+  /* Loading */
   if (loading) {
     return (
       <div className="mx-auto flex min-h-[680px] max-w-5xl flex-col items-center">
@@ -246,18 +448,13 @@ export default function ReviewView() {
     );
   }
 
-  /*
-   * Safe empty state.
-   */
+  /* Error */
   if (
-    error ||
-    !deck ||
-    deck.cards.length === 0
+    error &&
+    !deck
   ) {
     return (
       <div className="mx-auto flex min-h-[680px] max-w-5xl flex-col items-center">
-
-        {/* Header */}
         <div className="flex w-full">
           <Link
             href="/flashcards"
@@ -267,9 +464,7 @@ export default function ReviewView() {
           </Link>
         </div>
 
-        {/* Empty State */}
         <div className="mt-16 w-full max-w-3xl rounded-2xl bg-white p-10 text-center shadow-[0_12px_40px_rgba(70,132,50,.12)]">
-
           <div className="mx-auto grid size-14 place-items-center rounded-xl bg-[#f0eee8] text-[#2d6a1b]">
             <Icon
               name="card"
@@ -278,14 +473,11 @@ export default function ReviewView() {
           </div>
 
           <h1 className="mt-5 text-2xl font-bold">
-            {error
-              ? "Unable to load flashcards"
-              : "No flashcards to review"}
+            Unable to load flashcards
           </h1>
 
           <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#41493c]">
-            {error ||
-              "This deck does not contain any generated flashcards yet."}
+            {error}
           </p>
 
           <Link
@@ -295,19 +487,49 @@ export default function ReviewView() {
             Back to Flashcards
           </Link>
         </div>
+      </div>
+    );
+  }
 
-        {/* Information */}
-        <div className="mt-8 flex w-full flex-col justify-between gap-2 rounded-xl bg-[#f0eee8] p-4 text-sm sm:flex-row">
-          <span>
-            ✦ Flashcards are generated from your
-            uploaded materials.
-          </span>
-
-          <span>
-            Source-grounded review
-          </span>
+  /* Empty */
+  if (
+    !deck ||
+    deck.cards.length === 0
+  ) {
+    return (
+      <div className="mx-auto flex min-h-[680px] max-w-5xl flex-col items-center">
+        <div className="flex w-full">
+          <Link
+            href="/flashcards"
+            className="text-sm font-semibold text-[#41493c]"
+          >
+            ← Back to Flashcards
+          </Link>
         </div>
 
+        <div className="mt-16 w-full max-w-3xl rounded-2xl bg-white p-10 text-center shadow-[0_12px_40px_rgba(70,132,50,.12)]">
+          <div className="mx-auto grid size-14 place-items-center rounded-xl bg-[#f0eee8] text-[#2d6a1b]">
+            <Icon
+              name="card"
+              className="size-7"
+            />
+          </div>
+
+          <h1 className="mt-5 text-2xl font-bold">
+            No flashcards to review
+          </h1>
+
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#41493c]">
+            This deck does not contain any generated flashcards yet.
+          </p>
+
+          <Link
+            href="/flashcards"
+            className="mt-6 inline-flex rounded-xl bg-[#468432] px-5 py-3 text-sm font-semibold text-white"
+          >
+            Back to Flashcards
+          </Link>
+        </div>
       </div>
     );
   }
@@ -318,14 +540,27 @@ export default function ReviewView() {
   const totalCards =
     deck.cards.length;
 
-  /*
-   * This is only the current card position.
-   * We will diagnose real saved progress separately.
-   */
-  const positionProgress =
-    ((currentIndex + 1) /
-      totalCards) *
-    100;
+  const reviewedCount =
+    reviewedCardIds.length;
+
+  const progress =
+    totalCards > 0
+      ? Math.round(
+          (reviewedCount /
+            totalCards) *
+            100
+        )
+      : 0;
+
+  const completed =
+    progress >= 100;
+
+  const currentCardReviewed =
+    currentCard.cardId
+      ? reviewedCardIds.includes(
+          currentCard.cardId
+        )
+      : false;
 
   return (
     <div className="mx-auto flex min-h-[680px] max-w-5xl flex-col items-center">
@@ -352,20 +587,17 @@ export default function ReviewView() {
 
       </div>
 
-      {/* Card Position */}
+      {/* Study Progress */}
       <div className="mt-8 w-full max-w-3xl">
 
         <div className="flex items-center justify-between text-xs font-semibold text-[#41493c]">
           <span>
-            Card {currentIndex + 1} of{" "}
-            {totalCards}
+            {reviewedCount} of{" "}
+            {totalCards} cards reviewed
           </span>
 
-          <span>
-            {Math.round(
-              positionProgress
-            )}
-            %
+          <span className="text-[#2d6a1b]">
+            {progress}%
           </span>
         </div>
 
@@ -373,9 +605,22 @@ export default function ReviewView() {
           <div
             className="h-full rounded-full bg-[#468432] transition-all duration-500"
             style={{
-              width: `${positionProgress}%`,
+              width: `${progress}%`,
             }}
           />
+        </div>
+
+        <div className="mt-2 flex justify-between text-[10px] text-[#717a6b]">
+          <span>
+            Card {currentIndex + 1} of{" "}
+            {totalCards}
+          </span>
+
+          <span>
+            {completed
+              ? "All cards reviewed"
+              : "Keep going"}
+          </span>
         </div>
 
       </div>
@@ -392,12 +637,9 @@ export default function ReviewView() {
 
         <button
           type="button"
-          onClick={() =>
-            setShowAnswer(
-              (visible) => !visible
-            )
-          }
-          className="w-full text-left"
+          onClick={handleCardClick}
+          disabled={savingProgress}
+          className="w-full text-left disabled:cursor-wait"
           aria-label={
             showAnswer
               ? "Show question"
@@ -413,10 +655,9 @@ export default function ReviewView() {
             }`}
           >
 
-            {/* Question Side */}
+            {/* Question */}
             <article className="absolute inset-0 flex h-full flex-col overflow-hidden rounded-3xl bg-white p-8 shadow-[0_12px_40px_rgba(70,132,50,.10)] [backface-visibility:hidden] sm:p-10">
 
-              {/* Header */}
               <div className="flex shrink-0 items-center justify-between">
 
                 <span className="rounded-full bg-[#f0eee8] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[#2d6a1b]">
@@ -430,7 +671,6 @@ export default function ReviewView() {
 
               </div>
 
-              {/* Content */}
               <div className="flex flex-1 flex-col justify-center overflow-y-auto py-6">
 
                 <p className="text-xs font-bold uppercase tracking-wider text-[#717a6b]">
@@ -443,7 +683,6 @@ export default function ReviewView() {
 
               </div>
 
-              {/* Hint */}
               <div className="shrink-0 border-t border-[#f0eee8] pt-5 text-center">
 
                 <p className="text-xs font-semibold text-[#717a6b]">
@@ -454,10 +693,9 @@ export default function ReviewView() {
 
             </article>
 
-            {/* Answer Side */}
+            {/* Answer */}
             <article className="absolute inset-0 flex h-full flex-col overflow-hidden rounded-3xl bg-white p-8 shadow-[0_12px_40px_rgba(70,132,50,.10)] [backface-visibility:hidden] [transform:rotateY(180deg)] sm:p-10">
 
-              {/* Header */}
               <div className="flex shrink-0 items-center justify-between">
 
                 <span className="rounded-full bg-[#eaf7e3] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[#2d6a1b]">
@@ -471,7 +709,6 @@ export default function ReviewView() {
 
               </div>
 
-              {/* Content */}
               <div className="flex-1 overflow-y-auto py-6">
 
                 <p className="text-xs font-bold uppercase tracking-wider text-[#717a6b]">
@@ -482,7 +719,6 @@ export default function ReviewView() {
                   {currentCard.answer}
                 </h1>
 
-                {/* Explanation */}
                 {currentCard.explanation && (
                   <div className="mt-8 rounded-xl bg-[#f5f3ee] p-4">
 
@@ -501,12 +737,17 @@ export default function ReviewView() {
 
               </div>
 
-              {/* Hint */}
               <div className="shrink-0 border-t border-[#f0eee8] pt-5 text-center">
 
-                <p className="text-xs font-semibold text-[#717a6b]">
-                  Click the card to show the question
-                </p>
+                {currentCardReviewed ? (
+                  <p className="text-xs font-semibold text-[#468432]">
+                    ✓ Card reviewed
+                  </p>
+                ) : (
+                  <p className="text-xs font-semibold text-[#717a6b]">
+                    Click the card to show the question
+                  </p>
+                )}
 
               </div>
 
@@ -534,16 +775,21 @@ export default function ReviewView() {
 
         <button
           type="button"
-          onClick={() =>
-            setShowAnswer(
-              (visible) => !visible
-            )
-          }
-          className="rounded-xl bg-[#ffdcbe] px-5 py-3 text-sm font-semibold text-[#2c1600] transition hover:brightness-95"
+          disabled={savingProgress}
+          onClick={() => {
+            if (showAnswer) {
+              setShowAnswer(false);
+            } else {
+              revealAnswer();
+            }
+          }}
+          className="rounded-xl bg-[#ffdcbe] px-5 py-3 text-sm font-semibold text-[#2c1600] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {showAnswer
-            ? "Show Question"
-            : "Show Answer"}
+          {savingProgress
+            ? "Saving..."
+            : showAnswer
+              ? "Show Question"
+              : "Show Answer"}
         </button>
 
         <button
@@ -559,6 +805,26 @@ export default function ReviewView() {
         </button>
 
       </div>
+
+      {/* Completion */}
+      {completed && (
+        <div className="mt-8 w-full max-w-3xl rounded-2xl bg-[#eaf7e3] p-5">
+
+          <p className="text-sm font-bold text-[#2d6a1b]">
+            ✓ Deck completed
+          </p>
+
+          <h2 className="mt-1 text-lg font-bold">
+            You reviewed all{" "}
+            {totalCards} cards!
+          </h2>
+
+          <p className="mt-1 text-sm text-[#41493c]">
+            Your quiz is now unlocked.
+          </p>
+
+        </div>
+      )}
 
       {/* Information */}
       <div className="mt-8 flex w-full flex-col justify-between gap-2 rounded-xl bg-[#f0eee8] p-4 text-sm sm:flex-row">

@@ -18,11 +18,12 @@ type FlashcardDeck = {
   createdAt: string;
   updatedAt: string;
 
-  // Progress from DynamoDB
+  // Progress
   progress?: number;
   reviewedCount?: number;
   totalCards?: number;
   completed?: boolean;
+  reviewedCardIds?: string[];
 };
 
 type Material = {
@@ -41,46 +42,79 @@ function getButtonClass() {
   return "bg-[#468432] text-white";
 }
 
-function getProgress(deck: FlashcardDeck) {
-  const progress = Number(deck.progress ?? 0);
+function getMasteryLabel(
+  deck: FlashcardDeck
+) {
+  const reviewed =
+    Number(deck.reviewedCount ?? 0);
 
-  return Math.min(100, Math.max(0, progress));
-}
+  const total =
+    Number(
+      deck.totalCards ??
+        deck.cardCount ??
+        0
+    );
 
-function getReviewedCount(deck: FlashcardDeck) {
-  if (deck.reviewedCount !== undefined) {
-    return Number(deck.reviewedCount);
-  }
-
-  const progress = getProgress(deck);
-  return Math.round(
-    (progress / 100) * deck.cardCount
-  );
-}
-
-function getMasteryLabel(deck: FlashcardDeck) {
-  const progress = getProgress(deck);
-
-  if (progress >= 100) {
+  if (total > 0 && reviewed >= total) {
     return "Completed";
   }
 
-  if (progress > 0) {
+  if (reviewed > 0) {
     return "In progress";
   }
 
   return "New deck";
 }
 
-function getMasteryCount(deck: FlashcardDeck) {
-  const reviewed = getReviewedCount(deck);
-  const total = deck.totalCards ?? deck.cardCount;
+function getMasteryCount(
+  deck: FlashcardDeck
+) {
+  const reviewed =
+    Number(deck.reviewedCount ?? 0);
+
+  const total =
+    Number(
+      deck.totalCards ??
+        deck.cardCount ??
+        0
+    );
 
   return `${reviewed}/${total} known`;
 }
 
-function getBottomLabel(deck: FlashcardDeck) {
-  const progress = getProgress(deck);
+function getProgress(
+  deck: FlashcardDeck
+) {
+  const total =
+    Number(
+      deck.totalCards ??
+        deck.cardCount ??
+        0
+    );
+
+  if (total <= 0) {
+    return 0;
+  }
+
+  const reviewed =
+    Number(deck.reviewedCount ?? 0);
+
+  return Math.min(
+    100,
+    Math.max(
+      0,
+      Math.round(
+        (reviewed / total) * 100
+      )
+    )
+  );
+}
+
+function getBottomLabel(
+  deck: FlashcardDeck
+) {
+  const progress =
+    getProgress(deck);
 
   if (progress >= 100) {
     return "Ready for quiz";
@@ -108,28 +142,38 @@ function FlashcardCard({
   onReview,
   onDelete,
 }: FlashcardCardProps) {
-  const progress = getProgress(deck);
-  const reviewedCount = getReviewedCount(deck);
-  const totalCards = deck.totalCards ?? deck.cardCount;
+  const progress =
+    getProgress(deck);
 
   return (
     <article className="relative flex min-h-72 flex-col justify-between overflow-visible rounded-2xl bg-white p-5 shadow-sm">
+
       {/* Top accent */}
       <i
         className={`absolute inset-x-0 top-0 h-1 rounded-t-2xl ${getTopBarClass()}`}
       />
 
       <div>
+
         {/* Card header */}
         <div className="flex items-start justify-between">
+
           <span className="grid size-8 place-items-center rounded-lg bg-[#f0eee8] text-[#2d6a1b]">
-            <Icon name="card" className="size-5" />
+            <Icon
+              name="card"
+              className="size-5"
+            />
           </span>
 
           <div className="relative">
+
             <button
               type="button"
-              onClick={() => onToggleMenu(deck.deckId)}
+              onClick={() =>
+                onToggleMenu(
+                  deck.deckId
+                )
+              }
               className="grid size-9 place-items-center rounded-lg text-[#41493c] transition hover:bg-[#f5f3ee]"
               aria-label="Flashcard deck options"
               aria-expanded={menuOpen}
@@ -141,10 +185,15 @@ function FlashcardCard({
 
             {menuOpen && (
               <div className="absolute right-0 top-10 z-30 w-44 rounded-xl border border-[#e3dfd7] bg-white p-1.5 shadow-[0_12px_35px_rgba(0,0,0,.12)]">
+
                 {/* Review */}
                 <button
                   type="button"
-                  onClick={() => onReview(deck.deckId)}
+                  onClick={() =>
+                    onReview(
+                      deck.deckId
+                    )
+                  }
                   className="flex w-full items-center rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[#41493c] transition hover:bg-[#f5f3ee]"
                 >
                   ▶ Review
@@ -153,21 +202,28 @@ function FlashcardCard({
                 {/* Delete */}
                 <button
                   type="button"
-                  onClick={() => onDelete(deck)}
+                  onClick={() =>
+                    onDelete(deck)
+                  }
                   className="flex w-full items-center rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-[#dc2626] transition hover:bg-[#fff1f1]"
                 >
                   🗑 Delete
                 </button>
+
               </div>
             )}
+
           </div>
+
         </div>
 
         {/* Card count */}
         <div className="mt-3">
+
           <span className="rounded-full bg-[#eae8e2] px-2 py-1 text-[11px] font-bold text-[#41493c]">
             {deck.cardCount} cards
           </span>
+
         </div>
 
         {/* Title */}
@@ -176,12 +232,15 @@ function FlashcardCard({
         </h2>
 
         <p className="mt-1 text-sm text-[#41493c]">
-          Generated from {deck.materialName}
+          Generated from{" "}
+          {deck.materialName}
         </p>
 
         {/* Mastery */}
         <div className="mt-5 rounded-xl bg-[#f5f3ee] p-3">
+
           <div className="flex justify-between text-[11px] font-bold">
+
             <span>
               {getMasteryLabel(deck)}
             </span>
@@ -189,43 +248,57 @@ function FlashcardCard({
             <span className="text-[#2d6a1b]">
               {getMasteryCount(deck)}
             </span>
+
           </div>
 
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#e4e2dd]">
+
             <i
               className="block h-full rounded-full bg-[#99d771] transition-all duration-500"
               style={{
                 width: `${progress}%`,
               }}
             />
+
           </div>
 
-          <div className="mt-1.5 flex justify-between text-[10px] text-[#717a6b]">
-            <span>
-              {reviewedCount} of {totalCards} reviewed
-            </span>
+          <div className="mt-1 flex justify-between text-[10px] text-[#717a6b]">
 
             <span>
-              {progress}%
+              {progress}% reviewed
             </span>
+
+            {progress >= 100 && (
+              <span className="font-semibold text-[#468432]">
+                Complete
+              </span>
+            )}
+
           </div>
+
         </div>
+
       </div>
 
       {/* Card footer */}
       <div className="mt-5 flex items-center justify-between gap-3">
+
         <span className="text-[11px] text-[#41493c]">
           {getBottomLabel(deck)}
         </span>
 
         <button
           type="button"
-          onClick={() => onReview(deck.deckId)}
+          onClick={() =>
+            onReview(deck.deckId)
+          }
           className={`rounded-xl px-4 py-2 text-sm font-semibold ${getButtonClass()}`}
         >
           ▶ Review
         </button>
+
       </div>
+
     </article>
   );
 }
@@ -239,6 +312,7 @@ function SearchBar({
 }) {
   return (
     <div className="relative flex-1">
+
       <Icon
         name="search"
         className="absolute left-3 top-3 size-4 text-[#717a6b]"
@@ -247,11 +321,14 @@ function SearchBar({
       <input
         value={value}
         onChange={(event) =>
-          onChange(event.target.value)
+          onChange(
+            event.target.value
+          )
         }
         placeholder="Search flashcard decks..."
         className="w-full rounded-xl bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-[#468432]"
       />
+
     </div>
   );
 }
@@ -259,7 +336,8 @@ function SearchBar({
 export default function FlashcardsView() {
   const router = useRouter();
 
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] =
+    useState("");
 
   const [selectedMaterialId, setSelectedMaterialId] =
     useState("all");
@@ -270,7 +348,8 @@ export default function FlashcardsView() {
   const [materials, setMaterials] =
     useState<Material[]>([]);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] =
+    useState(true);
 
   const [generating, setGenerating] =
     useState(false);
@@ -287,7 +366,8 @@ export default function FlashcardsView() {
   const [deleting, setDeleting] =
     useState(false);
 
-  const [error, setError] = useState("");
+  const [error, setError] =
+    useState("");
 
   async function getToken() {
     const session =
@@ -310,17 +390,20 @@ export default function FlashcardsView() {
       setLoading(true);
       setError("");
 
-      const token = await getToken();
+      const token =
+        await getToken();
 
-      const response = await fetch(
-        `${API_BASE}/flashcards`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          cache: "no-store",
-        }
-      );
+      const response =
+        await fetch(
+          `${API_BASE}/flashcards`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+            cache: "no-store",
+          }
+        );
 
       const data =
         await response.json();
@@ -337,6 +420,7 @@ export default function FlashcardsView() {
           ? data.decks
           : []
       );
+
     } catch (err) {
       console.error(err);
 
@@ -352,17 +436,20 @@ export default function FlashcardsView() {
 
   async function loadMaterials() {
     try {
-      const token = await getToken();
+      const token =
+        await getToken();
 
-      const response = await fetch(
-        `${API_BASE}/materials`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          cache: "no-store",
-        }
-      );
+      const response =
+        await fetch(
+          `${API_BASE}/materials`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+            cache: "no-store",
+          }
+        );
 
       const data =
         await response.json();
@@ -375,10 +462,13 @@ export default function FlashcardsView() {
       }
 
       setMaterials(
-        Array.isArray(data.materials)
+        Array.isArray(
+          data.materials
+        )
           ? data.materials
           : []
       );
+
     } catch (err) {
       console.error(err);
 
@@ -405,21 +495,25 @@ export default function FlashcardsView() {
       setGenerating(true);
       setError("");
 
-      const token = await getToken();
+      const token =
+        await getToken();
 
-      const response = await fetch(
-        `${API_BASE}/flashcards/generate`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            materialId,
-          }),
-        }
-      );
+      const response =
+        await fetch(
+          `${API_BASE}/flashcards/generate`,
+          {
+            method: "POST",
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              materialId,
+            }),
+          }
+        );
 
       const data =
         await response.json();
@@ -434,6 +528,7 @@ export default function FlashcardsView() {
       setShowGenerateModal(false);
 
       await loadDecks();
+
     } catch (err) {
       console.error(err);
 
@@ -457,7 +552,10 @@ export default function FlashcardsView() {
   }
 
   async function confirmDelete() {
-    if (!deleteTarget || deleting) {
+    if (
+      !deleteTarget ||
+      deleting
+    ) {
       return;
     }
 
@@ -465,17 +563,20 @@ export default function FlashcardsView() {
       setDeleting(true);
       setError("");
 
-      const token = await getToken();
+      const token =
+        await getToken();
 
-      const response = await fetch(
-        `${API_BASE}/flashcards/${deleteTarget.deckId}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response =
+        await fetch(
+          `${API_BASE}/flashcards/${deleteTarget.deckId}`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
 
       const data =
         await response.json();
@@ -496,6 +597,7 @@ export default function FlashcardsView() {
       );
 
       setDeleteTarget(null);
+
     } catch (err) {
       console.error(err);
 
@@ -513,64 +615,59 @@ export default function FlashcardsView() {
     loadDecks();
   }, []);
 
-  const filteredDecks = useMemo(() => {
-    const query =
-      searchQuery.trim().toLowerCase();
+  const filteredDecks =
+    useMemo(() => {
+      const query =
+        searchQuery
+          .trim()
+          .toLowerCase();
 
-    return decks.filter((deck) => {
-      const matchesSearch =
-        !query ||
-        deck.title
-          .toLowerCase()
-          .includes(query) ||
-        deck.materialName
-          .toLowerCase()
-          .includes(query);
+      return decks.filter(
+        (deck) => {
+          const matchesSearch =
+            !query ||
+            deck.title
+              .toLowerCase()
+              .includes(query) ||
+            deck.materialName
+              .toLowerCase()
+              .includes(query);
 
-      const matchesMaterial =
-        selectedMaterialId === "all" ||
-        deck.materialId ===
-          selectedMaterialId;
+          const matchesMaterial =
+            selectedMaterialId ===
+              "all" ||
+            deck.materialId ===
+              selectedMaterialId;
 
-      return (
-        matchesSearch &&
-        matchesMaterial
+          return (
+            matchesSearch &&
+            matchesMaterial
+          );
+        }
       );
-    });
-  }, [
-    decks,
-    searchQuery,
-    selectedMaterialId,
-  ]);
+    }, [
+      decks,
+      searchQuery,
+      selectedMaterialId,
+    ]);
 
-  const totalCards = decks.reduce(
-    (total, deck) =>
-      total + deck.cardCount,
-    0
-  );
-
-  const totalReviewedCards =
+  const totalCards =
     decks.reduce(
       (total, deck) =>
         total +
-        getReviewedCount(deck),
+        Number(
+          deck.cardCount || 0
+        ),
       0
     );
-
-  const overallProgress =
-    totalCards > 0
-      ? Math.round(
-          (totalReviewedCards /
-            totalCards) *
-            100
-        )
-      : 0;
 
   return (
     <>
       {/* Page Header */}
       <div className="flex flex-col justify-between gap-4 sm:flex-row">
+
         <div>
+
           <div className="text-[11px] font-bold uppercase tracking-wider text-[#2d6a1b]">
             Active recall library
           </div>
@@ -580,18 +677,22 @@ export default function FlashcardsView() {
           </h1>
 
           <p className="text-sm text-[#41493c]">
-            Generated from your uploaded
-            course materials
+            Generated from your uploaded course
+            materials
           </p>
+
         </div>
 
         <button
           type="button"
-          onClick={handleOpenGenerate}
+          onClick={
+            handleOpenGenerate
+          }
           className="rounded-xl bg-[#ffdcbe] px-5 py-3 text-sm font-semibold text-[#2c1600]"
         >
           ✦ Generate from Material
         </button>
+
       </div>
 
       {/* Error */}
@@ -603,13 +704,16 @@ export default function FlashcardsView() {
 
       {/* Search / Filter Bar */}
       <div className="mt-7 flex flex-col gap-3 rounded-xl bg-[#f0eee8] p-4 sm:flex-row">
+
         <SearchBar
           value={searchQuery}
           onChange={setSearchQuery}
         />
 
         <select
-          value={selectedMaterialId}
+          value={
+            selectedMaterialId
+          }
           onChange={(event) =>
             setSelectedMaterialId(
               event.target.value
@@ -617,66 +721,93 @@ export default function FlashcardsView() {
           }
           className="rounded-xl bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-[#468432]"
         >
+
           <option value="all">
             All materials
           </option>
 
-          {materials.map((material) => (
-            <option
-              key={material.materialId}
-              value={material.materialId}
-            >
-              {material.name}
-            </option>
-          ))}
+          {materials.map(
+            (material) => (
+              <option
+                key={
+                  material.materialId
+                }
+                value={
+                  material.materialId
+                }
+              >
+                {material.name}
+              </option>
+            )
+          )}
+
         </select>
 
         <span className="rounded-full bg-white px-3 py-2 text-sm font-semibold text-[#2d6a1b]">
           {totalCards} cards
         </span>
+
       </div>
 
       {/* Flashcard Decks */}
       {loading ? (
         <div className="mt-6 rounded-2xl bg-white p-10 text-center shadow-sm">
+
           <p className="text-sm text-[#41493c]">
             Loading your flashcard decks...
           </p>
+
         </div>
       ) : filteredDecks.length > 0 ? (
+
         <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {filteredDecks.map((deck) => (
-            <FlashcardCard
-              key={deck.deckId}
-              deck={deck}
-              menuOpen={
-                openMenuId ===
-                deck.deckId
-              }
-              onToggleMenu={(deckId) =>
-                setOpenMenuId(
+
+          {filteredDecks.map(
+            (deck) => (
+              <FlashcardCard
+                key={deck.deckId}
+                deck={deck}
+                menuOpen={
                   openMenuId ===
-                    deckId
-                    ? null
-                    : deckId
-                )
-              }
-              onReview={(deckId) =>
-                router.push(
-                  `/flashcards/${deckId}`
-                )
-              }
-              onDelete={handleDelete}
-            />
-          ))}
+                  deck.deckId
+                }
+                onToggleMenu={(
+                  deckId
+                ) =>
+                  setOpenMenuId(
+                    openMenuId ===
+                      deckId
+                      ? null
+                      : deckId
+                  )
+                }
+                onReview={(
+                  deckId
+                ) =>
+                  router.push(
+                    `/flashcards/${deckId}`
+                  )
+                }
+                onDelete={
+                  handleDelete
+                }
+              />
+            )
+          )}
+
         </div>
+
       ) : (
+
         <div className="mt-6 rounded-2xl bg-white p-10 text-center shadow-sm">
+
           <div className="mx-auto grid size-12 place-items-center rounded-xl bg-[#f0eee8] text-[#2d6a1b]">
+
             <Icon
               name="card"
               className="size-6"
             />
+
           </div>
 
           <h2 className="mt-4 font-semibold">
@@ -692,18 +823,23 @@ export default function FlashcardsView() {
 
           <button
             type="button"
-            onClick={handleOpenGenerate}
+            onClick={
+              handleOpenGenerate
+            }
             className="mt-5 rounded-xl bg-[#468432] px-5 py-2.5 text-sm font-semibold text-white"
           >
             ✦ Generate Flashcards
           </button>
+
         </div>
       )}
 
       {/* Bottom Information */}
       <div className="mt-8 grid gap-5 lg:grid-cols-3">
+
         {/* Sync Information */}
         <div className="rounded-2xl bg-[#f0eee8] p-5 lg:col-span-2">
+
           <b className="text-[#356b10]">
             ⌁ Sync Active
           </b>
@@ -718,35 +854,42 @@ export default function FlashcardsView() {
             aligns questions with your
             uploaded study materials.
           </p>
+
         </div>
 
-        {/* Overall Progress */}
+        {/* Weekly Goal */}
         <div className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-sm">
-          <span
-            className="grid size-16 shrink-0 place-items-center rounded-full border-4 border-[#2d6a1b] font-bold text-[#2d6a1b]"
-          >
-            {overallProgress}%
+
+          <span className="grid size-16 place-items-center rounded-full border-4 border-[#2d6a1b] font-bold text-[#2d6a1b]">
+            0%
           </span>
 
           <div>
+
             <b>
-              Flashcard Progress
+              Weekly Goal Progress
             </b>
 
             <p className="text-sm text-[#41493c]">
-              {totalReviewedCards} of{" "}
-              {totalCards} cards reviewed
+              No cards retained yet
             </p>
+
           </div>
+
         </div>
+
       </div>
 
       {/* Generate Modal */}
       {showGenerateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+
             <div className="flex items-start justify-between gap-4">
+
               <div>
+
                 <h2 className="text-xl font-bold">
                   Generate Flashcards
                 </h2>
@@ -756,96 +899,125 @@ export default function FlashcardsView() {
                   for StudyMate AI to generate
                   flashcards from.
                 </p>
+
               </div>
 
               <button
                 type="button"
                 onClick={() =>
-                  setShowGenerateModal(false)
+                  setShowGenerateModal(
+                    false
+                  )
                 }
                 className="rounded-lg px-2 py-1 text-lg text-[#717a6b] hover:bg-[#f5f3ee]"
               >
                 ×
               </button>
+
             </div>
 
             <div className="mt-5 max-h-80 space-y-2 overflow-y-auto">
+
               {materials.length === 0 ? (
+
                 <div className="rounded-xl bg-[#f5f3ee] p-5 text-center">
+
                   <p className="text-sm text-[#41493c]">
                     No uploaded materials
                     available.
                   </p>
+
                 </div>
+
               ) : (
-                materials.map((material) => {
-                  const hasText =
-                    Boolean(
-                      material.extractedText?.trim()
-                    );
 
-                  return (
-                    <div
-                      key={material.materialId}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-[#e4e2dd] p-4"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">
-                          {material.name}
-                        </p>
+                materials.map(
+                  (material) => {
+                    const hasText =
+                      Boolean(
+                        material.extractedText?.trim()
+                      );
 
-                        <p className="mt-1 text-xs text-[#717a6b]">
-                          {material.pageCount
-                            ? `${material.pageCount} pages`
-                            : "Uploaded material"}
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        disabled={
-                          !hasText ||
-                          generating
+                    return (
+                      <div
+                        key={
+                          material.materialId
                         }
-                        onClick={() =>
-                          handleGenerate(
-                            material.materialId
-                          )
-                        }
-                        className="shrink-0 rounded-lg bg-[#468432] px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        className="flex items-center justify-between gap-3 rounded-xl border border-[#e4e2dd] p-4"
                       >
-                        {generating
-                          ? "Generating..."
-                          : "Generate"}
-                      </button>
-                    </div>
-                  );
-                })
+
+                        <div className="min-w-0">
+
+                          <p className="truncate text-sm font-semibold">
+                            {material.name}
+                          </p>
+
+                          <p className="mt-1 text-xs text-[#717a6b]">
+                            {material.pageCount
+                              ? `${material.pageCount} pages`
+                              : "Uploaded material"}
+                          </p>
+
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={
+                            !hasText ||
+                            generating
+                          }
+                          onClick={() =>
+                            handleGenerate(
+                              material.materialId
+                            )
+                          }
+                          className="shrink-0 rounded-lg bg-[#468432] px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {generating
+                            ? "Generating..."
+                            : "Generate"}
+                        </button>
+
+                      </div>
+                    );
+                  }
+                )
+
               )}
+
             </div>
+
           </div>
+
         </div>
       )}
 
       {/* Delete Confirmation */}
       {deleteTarget && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4">
+
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(0,0,0,.2)]">
+
             <div className="flex items-start gap-4">
+
               <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#fff1f1] text-[#dc2626]">
+
                 <span className="text-lg">
                   🗑
                 </span>
+
               </div>
 
               <div>
+
                 <h2 className="text-lg font-bold">
                   Delete flashcards?
                 </h2>
 
                 <p className="mt-1 text-sm leading-6 text-[#41493c]">
                   Delete "
-                  {deleteTarget.title}"?
+                  {deleteTarget.title}
+                  "?
                 </p>
 
                 <p className="mt-2 text-xs leading-5 text-[#717a6b]">
@@ -853,15 +1025,20 @@ export default function FlashcardsView() {
                   this flashcard deck and its
                   cards.
                 </p>
+
               </div>
+
             </div>
 
             <div className="mt-6 flex justify-end gap-3">
+
               <button
                 type="button"
                 disabled={deleting}
                 onClick={() =>
-                  setDeleteTarget(null)
+                  setDeleteTarget(
+                    null
+                  )
                 }
                 className="rounded-xl border border-[#e3dfd7] px-4 py-2.5 text-sm font-semibold text-[#41493c] transition hover:bg-[#f5f3ee] disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -871,17 +1048,23 @@ export default function FlashcardsView() {
               <button
                 type="button"
                 disabled={deleting}
-                onClick={confirmDelete}
+                onClick={
+                  confirmDelete
+                }
                 className="rounded-xl bg-[#dc2626] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {deleting
                   ? "Deleting..."
                   : "Delete"}
               </button>
+
             </div>
+
           </div>
+
         </div>
       )}
+
     </>
   );
 }
