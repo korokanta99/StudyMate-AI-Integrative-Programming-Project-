@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { fetchAuthSession } from "aws-amplify/auth";
 import { useMockAuth } from "@/components/auth/MockAuth";
 
 type Material = {
@@ -12,6 +13,18 @@ type Material = {
   name?: string;
   title?: string;
 };
+
+type SubscriptionData = {
+  pro?: boolean;
+  status?: string;
+  plan?: string;
+  currentPeriodEnd?: string;
+  trialEnd?: string;
+  cancelAtPeriodEnd?: boolean;
+};
+
+const API_URL =
+  "https://8auzzcojhh.execute-api.ap-southeast-1.amazonaws.com";
 
 export default function Header() {
   const pathname = usePathname();
@@ -22,6 +35,12 @@ export default function Header() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [materials, setMaterials] = useState<Material[]>([]);
+
+  const [subscription, setSubscription] =
+    useState<SubscriptionData | null>(null);
+
+  const [checkingSubscription, setCheckingSubscription] =
+    useState(true);
 
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -34,18 +53,92 @@ export default function Header() {
     .slice(0, 2)
     .toUpperCase();
 
-  const accountStatus = auth.pro ? "Premium" : "Free";
+  // Real subscription state
+  const isPro =
+    subscription?.pro === true ||
+    subscription?.status === "active" ||
+    subscription?.status === "trialing";
+
+  const accountStatus = isPro
+    ? "Premium"
+    : "Free";
+
+  // Load real subscription
+  useEffect(() => {
+    async function loadSubscription() {
+      try {
+        setCheckingSubscription(true);
+
+        const session =
+          await fetchAuthSession();
+
+        const token =
+          session.tokens?.idToken?.toString();
+
+        if (!token) {
+          setSubscription(null);
+          return;
+        }
+
+        const response = await fetch(
+          `${API_URL}/subscription`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          setSubscription(null);
+          return;
+        }
+
+        const data =
+          await response.json();
+
+        console.log(
+          "HEADER SUBSCRIPTION RESPONSE:",
+          response.status,
+          JSON.stringify(data, null, 2)
+        );
+
+        const subscriptionData =
+          data?.subscription &&
+          typeof data.subscription === "object"
+            ? data.subscription
+            : data;
+
+        setSubscription(subscriptionData);
+      } catch (error) {
+        console.error(
+          "Failed to load subscription for header:",
+          error
+        );
+
+        setSubscription(null);
+      } finally {
+        setCheckingSubscription(false);
+      }
+    }
+
+    loadSubscription();
+  }, []);
 
   // Load real uploaded materials for search
   useEffect(() => {
     async function loadMaterials() {
       try {
-        const token = localStorage.getItem("studymate_access_token");
+        const token =
+          localStorage.getItem(
+            "studymate_access_token"
+          );
 
         if (!token) return;
 
         const response = await fetch(
-          "https://8auzzcojhh.execute-api.ap-southeast-1.amazonaws.com/materials",
+          `${API_URL}/materials`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -55,11 +148,19 @@ export default function Header() {
 
         if (!response.ok) return;
 
-        const data = await response.json();
+        const data =
+          await response.json();
 
-        setMaterials(Array.isArray(data) ? data : data.materials ?? []);
+        setMaterials(
+          Array.isArray(data)
+            ? data
+            : data.materials ?? []
+        );
       } catch (error) {
-        console.error("Failed to load materials for search:", error);
+        console.error(
+          "Failed to load materials for search:",
+          error
+        );
       }
     }
 
@@ -73,19 +174,23 @@ export default function Header() {
     }
   }, [searchOpen]);
 
-  const filteredMaterials = materials.filter((material) => {
-    const query = search.trim().toLowerCase();
+  const filteredMaterials =
+    materials.filter((material) => {
+      const query =
+        search.trim().toLowerCase();
 
-    if (!query) return false;
+      if (!query) return false;
 
-    const name =
-      material.fileName ||
-      material.name ||
-      material.title ||
-      "";
+      const name =
+        material.fileName ||
+        material.name ||
+        material.title ||
+        "";
 
-    return name.toLowerCase().includes(query);
-  });
+      return name
+        .toLowerCase()
+        .includes(query);
+    });
 
   function openSearch() {
     setSearchOpen(true);
@@ -102,7 +207,8 @@ export default function Header() {
   ) {
     event.preventDefault();
 
-    const query = search.trim();
+    const query =
+      search.trim();
 
     if (!query) return;
 
@@ -116,16 +222,19 @@ export default function Header() {
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-[#eae8e2] bg-[#fbf9f3]/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-[1200px] items-center gap-4 px-4 md:px-8">
-
         {/* Free / Premium */}
         <span
           className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-            auth.pro
-              ? "bg-[#b4f48a] text-[#215100]"
-              : "bg-[#eae8e2] text-[#41493c]"
+            checkingSubscription
+              ? "bg-[#eae8e2] text-[#717a6b]"
+              : isPro
+                ? "bg-[#b4f48a] text-[#215100]"
+                : "bg-[#eae8e2] text-[#41493c]"
           }`}
         >
-          {accountStatus}
+          {checkingSubscription
+            ? "Checking..."
+            : accountStatus}
         </span>
 
         {/* Logo */}
@@ -159,12 +268,15 @@ export default function Header() {
 
         {/* Right-side controls */}
         <div className="ml-auto flex items-center gap-3">
-
-
           {/* Streak */}
           <div className="flex items-center gap-1.5 rounded-full bg-[#eae8e2] px-3 py-2 text-sm font-semibold text-[#717a6b]">
-            <span className="text-base">🔥</span>
-            <span>0d streak</span>
+            <span className="text-base">
+              🔥
+            </span>
+
+            <span>
+              0d streak
+            </span>
           </div>
 
           {/* Notifications */}
@@ -189,7 +301,9 @@ export default function Header() {
           <div className="relative">
             <button
               type="button"
-              onClick={() => setOpen(!open)}
+              onClick={() =>
+                setOpen(!open)
+              }
               className="grid size-9 place-items-center rounded-full bg-[#b4f48a] text-xs font-bold text-[#215100]"
               aria-label="Open profile menu"
             >
@@ -200,7 +314,9 @@ export default function Header() {
               <div className="absolute right-0 top-11 w-48 rounded-xl bg-white p-2 text-sm shadow-lg">
                 <Link
                   href="/profile"
-                  onClick={() => setOpen(false)}
+                  onClick={() =>
+                    setOpen(false)
+                  }
                   className="block rounded-lg px-3 py-2 hover:bg-[#f5f3ee]"
                 >
                   Profile
@@ -208,7 +324,9 @@ export default function Header() {
 
                 <Link
                   href="/materials"
-                  onClick={() => setOpen(false)}
+                  onClick={() =>
+                    setOpen(false)
+                  }
                   className="block rounded-lg px-3 py-2 hover:bg-[#f5f3ee]"
                 >
                   Study Materials
