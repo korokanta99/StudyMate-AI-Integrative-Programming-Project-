@@ -159,7 +159,7 @@ export default function ReviewView() {
 
       setDeck(normalizedDeck);
 
-      // Opening a real deck for review counts as study activity.
+      // Opening a real deck counts as study activity.
       if (apiCards.length > 0) {
         await recordStudyActivity(
           token
@@ -248,7 +248,6 @@ export default function ReviewView() {
 
   /*
    * Safe empty state.
-   * deck.cards is always an array after normalization.
    */
   if (
     error ||
@@ -319,7 +318,11 @@ export default function ReviewView() {
   const totalCards =
     deck.cards.length;
 
-  const progress =
+  /*
+   * This is only the current card position.
+   * We will diagnose real saved progress separately.
+   */
+  const positionProgress =
     ((currentIndex + 1) /
       totalCards) *
     100;
@@ -349,7 +352,7 @@ export default function ReviewView() {
 
       </div>
 
-      {/* Progress */}
+      {/* Card Position */}
       <div className="mt-8 w-full max-w-3xl">
 
         <div className="flex items-center justify-between text-xs font-semibold text-[#41493c]">
@@ -359,23 +362,33 @@ export default function ReviewView() {
           </span>
 
           <span>
-            {Math.round(progress)}%
+            {Math.round(
+              positionProgress
+            )}
+            %
           </span>
         </div>
 
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#e4e2dd]">
           <div
-            className="h-full rounded-full bg-[#468432] transition-all"
+            className="h-full rounded-full bg-[#468432] transition-all duration-500"
             style={{
-              width: `${progress}%`,
+              width: `${positionProgress}%`,
             }}
           />
         </div>
 
       </div>
 
+      {/* Error */}
+      {error && (
+        <div className="mt-4 w-full max-w-3xl rounded-xl bg-[#fff0ed] px-4 py-3 text-sm text-[#a52a1f]">
+          {error}
+        </div>
+      )}
+
       {/* Flashcard */}
-      <div className="mt-8 w-full max-w-3xl [perspective:1200px]">
+      <div className="mt-8 w-full max-w-3xl [perspective:1400px]">
 
         <button
           type="button"
@@ -385,9 +398,15 @@ export default function ReviewView() {
             )
           }
           className="w-full text-left"
+          aria-label={
+            showAnswer
+              ? "Show question"
+              : "Show answer"
+          }
         >
+
           <div
-            className={`relative min-h-[390px] w-full transition-transform duration-500 [transform-style:preserve-3d] ${
+            className={`relative h-[390px] w-full transition-transform duration-500 ease-[cubic-bezier(.4,.2,.2,1)] [transform-style:preserve-3d] ${
               showAnswer
                 ? "[transform:rotateY(180deg)]"
                 : ""
@@ -395,10 +414,10 @@ export default function ReviewView() {
           >
 
             {/* Question Side */}
-            <article className="absolute inset-0 min-h-[390px] rounded-3xl bg-white p-8 shadow-[0_12px_40px_rgba(70,132,50,.12)] [backface-visibility:hidden] sm:p-10">
+            <article className="absolute inset-0 flex h-full flex-col overflow-hidden rounded-3xl bg-white p-8 shadow-[0_12px_40px_rgba(70,132,50,.10)] [backface-visibility:hidden] sm:p-10">
 
-              {/* Card Header */}
-              <div className="flex items-center justify-between">
+              {/* Header */}
+              <div className="flex shrink-0 items-center justify-between">
 
                 <span className="rounded-full bg-[#f0eee8] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[#2d6a1b]">
                   Question
@@ -411,8 +430,8 @@ export default function ReviewView() {
 
               </div>
 
-              {/* Card Content */}
-              <div className="mt-12">
+              {/* Content */}
+              <div className="flex flex-1 flex-col justify-center overflow-y-auto py-6">
 
                 <p className="text-xs font-bold uppercase tracking-wider text-[#717a6b]">
                   Question
@@ -424,17 +443,22 @@ export default function ReviewView() {
 
               </div>
 
-              <p className="mt-12 text-center text-xs font-semibold text-[#717a6b]">
-                Click the card to reveal the answer
-              </p>
+              {/* Hint */}
+              <div className="shrink-0 border-t border-[#f0eee8] pt-5 text-center">
+
+                <p className="text-xs font-semibold text-[#717a6b]">
+                  Click the card to reveal the answer
+                </p>
+
+              </div>
 
             </article>
 
             {/* Answer Side */}
-            <article className="absolute inset-0 min-h-[390px] rounded-3xl bg-white p-8 shadow-[0_12px_40px_rgba(70,132,50,.12)] [backface-visibility:hidden] [transform:rotateY(180deg)] sm:p-10">
+            <article className="absolute inset-0 flex h-full flex-col overflow-hidden rounded-3xl bg-white p-8 shadow-[0_12px_40px_rgba(70,132,50,.10)] [backface-visibility:hidden] [transform:rotateY(180deg)] sm:p-10">
 
-              {/* Card Header */}
-              <div className="flex items-center justify-between">
+              {/* Header */}
+              <div className="flex shrink-0 items-center justify-between">
 
                 <span className="rounded-full bg-[#eaf7e3] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[#2d6a1b]">
                   Answer
@@ -447,8 +471,8 @@ export default function ReviewView() {
 
               </div>
 
-              {/* Card Content */}
-              <div className="mt-12">
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto py-6">
 
                 <p className="text-xs font-bold uppercase tracking-wider text-[#717a6b]">
                   Answer
@@ -458,32 +482,38 @@ export default function ReviewView() {
                   {currentCard.answer}
                 </h1>
 
+                {/* Explanation */}
+                {currentCard.explanation && (
+                  <div className="mt-8 rounded-xl bg-[#f5f3ee] p-4">
+
+                    <p className="text-xs font-bold uppercase tracking-wider text-[#717a6b]">
+                      Explanation
+                    </p>
+
+                    <p className="mt-2 text-sm leading-6 text-[#41493c]">
+                      {
+                        currentCard.explanation
+                      }
+                    </p>
+
+                  </div>
+                )}
+
               </div>
 
-              {/* Explanation */}
-              {currentCard.explanation && (
-                <div className="mt-8 rounded-xl bg-[#f5f3ee] p-4">
+              {/* Hint */}
+              <div className="shrink-0 border-t border-[#f0eee8] pt-5 text-center">
 
-                  <p className="text-xs font-bold uppercase tracking-wider text-[#717a6b]">
-                    Explanation
-                  </p>
+                <p className="text-xs font-semibold text-[#717a6b]">
+                  Click the card to show the question
+                </p>
 
-                  <p className="mt-2 text-sm leading-6 text-[#41493c]">
-                    {
-                      currentCard.explanation
-                    }
-                  </p>
-
-                </div>
-              )}
-
-              <p className="mt-8 text-center text-xs font-semibold text-[#717a6b]">
-                Click the card to see the question
-              </p>
+              </div>
 
             </article>
 
           </div>
+
         </button>
 
       </div>
@@ -497,7 +527,7 @@ export default function ReviewView() {
             currentIndex === 0
           }
           onClick={handlePrevious}
-          className="rounded-xl bg-[#f0eee8] px-5 py-3 text-sm font-semibold text-[#41493c] disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-xl bg-[#f0eee8] px-5 py-3 text-sm font-semibold text-[#41493c] transition hover:bg-[#e7e5df] disabled:cursor-not-allowed disabled:opacity-40"
         >
           ← Previous
         </button>
@@ -509,7 +539,7 @@ export default function ReviewView() {
               (visible) => !visible
             )
           }
-          className="rounded-xl bg-[#ffdcbe] px-5 py-3 text-sm font-semibold text-[#2c1600]"
+          className="rounded-xl bg-[#ffdcbe] px-5 py-3 text-sm font-semibold text-[#2c1600] transition hover:brightness-95"
         >
           {showAnswer
             ? "Show Question"
@@ -523,7 +553,7 @@ export default function ReviewView() {
             totalCards - 1
           }
           onClick={handleNext}
-          className="rounded-xl bg-[#468432] px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-xl bg-[#468432] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#3d752c] disabled:cursor-not-allowed disabled:opacity-40"
         >
           Next →
         </button>
