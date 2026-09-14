@@ -97,10 +97,8 @@ function getFileType(
   }
 
   if (
-    extension === "doc" ||
     extension === "docx" ||
     extension === "txt" ||
-    contentType === "application/msword" ||
     contentType === "text/plain" ||
     contentType ===
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -109,9 +107,7 @@ function getFileType(
   }
 
   if (
-    extension === "ppt" ||
     extension === "pptx" ||
-    contentType === "application/vnd.ms-powerpoint" ||
     contentType ===
       "application/vnd.openxmlformats-officedocument.presentationml.presentation"
   ) {
@@ -313,16 +309,19 @@ export default function MaterialsView() {
       return;
     }
 
-    const isPdf =
-      file.type ===
-        "application/pdf" ||
-      file.name
-        .toLowerCase()
-        .endsWith(".pdf");
+    const extension =
+      getFileExtension(file.name);
 
-    if (!isPdf) {
+    const supportedTypes = [
+      "pdf",
+      "docx",
+      "pptx",
+      "txt",
+    ];
+
+    if (!supportedTypes.includes(extension)) {
       setUploadMessage(
-        "Only PDF files are currently supported."
+        "Supported files: PDF, DOCX, PPTX, and TXT."
       );
 
       if (fileInputRef.current) {
@@ -346,6 +345,10 @@ export default function MaterialsView() {
         );
       }
 
+      const contentType =
+        file.type ||
+        "application/octet-stream";
+
       /* Upload URL */
       const uploadUrlResponse =
         await fetch(
@@ -360,8 +363,7 @@ export default function MaterialsView() {
             },
             body: JSON.stringify({
               fileName: file.name,
-              contentType:
-                "application/pdf",
+              contentType,
               size: file.size,
             }),
           }
@@ -406,7 +408,7 @@ export default function MaterialsView() {
             method: "PUT",
             headers: {
               "Content-Type":
-                "application/pdf",
+                contentType,
             },
             body: file,
           }
@@ -907,7 +909,7 @@ export default function MaterialsView() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,application/pdf"
+              accept=".pdf,.docx,.pptx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain"
               onChange={handleUpload}
               className="hidden"
             />
