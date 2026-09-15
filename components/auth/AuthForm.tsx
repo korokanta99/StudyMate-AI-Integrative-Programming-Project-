@@ -17,7 +17,7 @@ export default function AuthForm({
   const router = useRouter();
   const { signIn } = useMockAuth();
 
-  const [name, setName] = useState("Candice Berdin");
+  const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
