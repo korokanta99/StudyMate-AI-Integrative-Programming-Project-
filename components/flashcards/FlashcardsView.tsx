@@ -26,6 +26,13 @@ type FlashcardDeck = {
   reviewedCardIds?: string[];
 };
 
+type WeeklyGoal = {
+  cardsReviewed: number;
+  weeklyGoal: number;
+  progress: number;
+  goalReached: boolean;
+};
+
 type Material = {
   materialId: string;
   name: string;
@@ -132,6 +139,7 @@ type FlashcardCardProps = {
   menuOpen: boolean;
   onToggleMenu: (deckId: string) => void;
   onReview: (deckId: string) => void;
+  onHistory: (deckId: string) => void;
   onDelete: (deck: FlashcardDeck) => void;
 };
 
@@ -140,6 +148,7 @@ function FlashcardCard({
   menuOpen,
   onToggleMenu,
   onReview,
+  onHistory,
   onDelete,
 }: FlashcardCardProps) {
   const progress =
@@ -197,6 +206,17 @@ function FlashcardCard({
                   className="flex w-full items-center rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[#41493c] transition hover:bg-[#f5f3ee]"
                 >
                   ▶ Review
+                </button>
+
+                {/* Quiz History */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    onHistory(deck.deckId)
+                  }
+                  className="flex w-full items-center rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[#41493c] transition hover:bg-[#f5f3ee]"
+                >
+                  ◷ Quiz History
                 </button>
 
                 {/* Delete */}
@@ -368,6 +388,14 @@ export default function FlashcardsView() {
 
   const [error, setError] =
     useState("");
+
+  const [weeklyGoal, setWeeklyGoal] =
+    useState<WeeklyGoal>({
+      cardsReviewed: 0,
+      weeklyGoal: 50,
+      progress: 0,
+      goalReached: false,
+    });
 
   async function getToken() {
     const session =
@@ -611,8 +639,54 @@ export default function FlashcardsView() {
     }
   }
 
+  async function loadWeeklyGoal() {
+    try {
+      const token =
+        await getToken();
+
+      const response =
+        await fetch(
+          `${API_BASE}/activity/weekly`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+            cache: "no-store",
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            "Unable to load weekly goal."
+        );
+      }
+
+      setWeeklyGoal({
+        cardsReviewed:
+          Number(data.cardsReviewed || 0),
+        weeklyGoal:
+          Number(data.weeklyGoal || 50),
+        progress:
+          Number(data.progress || 0),
+        goalReached:
+          data.goalReached === true,
+      });
+    } catch (err) {
+      console.error(
+        "Weekly goal load failed:",
+        err
+      );
+    }
+  }
+
   useEffect(() => {
     loadDecks();
+    loadWeeklyGoal();
   }, []);
 
   const filteredDecks =
@@ -788,6 +862,14 @@ export default function FlashcardsView() {
                     `/flashcards/${deckId}`
                   )
                 }
+                onHistory={(
+                  deckId
+                ) => {
+                  setOpenMenuId(null);
+                  router.push(
+                    `/flashcards/${deckId}/quiz/history`
+                  );
+                }}
                 onDelete={
                   handleDelete
                 }
@@ -860,18 +942,20 @@ export default function FlashcardsView() {
         {/* Weekly Goal */}
         <div className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-sm">
 
-          <span className="grid size-16 place-items-center rounded-full border-4 border-[#2d6a1b] font-bold text-[#2d6a1b]">
-            0%
+          <span className="grid size-16 shrink-0 place-items-center rounded-full border-4 border-[#2d6a1b] font-bold text-[#2d6a1b]">
+            {weeklyGoal.progress}%
           </span>
 
-          <div>
+          <div className="min-w-0">
 
             <b>
               Weekly Goal Progress
             </b>
 
-            <p className="text-sm text-[#41493c]">
-              No cards retained yet
+            <p className="mt-1 text-sm text-[#41493c]">
+              {weeklyGoal.goalReached
+                ? `🎉 Goal reached! ${weeklyGoal.cardsReviewed}/${weeklyGoal.weeklyGoal} cards reviewed this week`
+                : `${weeklyGoal.cardsReviewed}/${weeklyGoal.weeklyGoal} cards reviewed this week`}
             </p>
 
           </div>
