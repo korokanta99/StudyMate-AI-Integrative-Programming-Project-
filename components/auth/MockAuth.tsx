@@ -43,6 +43,14 @@ export function MockAuthProvider({
     "Biology · Class of 2027"
   );
 
+  // Controls the inactivity warning modal
+  const [showInactivityWarning, setShowInactivityWarning] =
+    useState(false);
+
+  // ============================================================
+  // LOAD CURRENT USER
+  // ============================================================
+
   useEffect(() => {
     async function loadUser() {
       try {
@@ -63,6 +71,10 @@ export function MockAuthProvider({
     loadUser();
   }, []);
 
+  // ============================================================
+  // SIGN IN
+  // ============================================================
+
   async function signIn(identifier: string, password: string) {
     const result = await cognitoSignIn({
       username: identifier,
@@ -80,13 +92,24 @@ export function MockAuthProvider({
     }
   }
 
-  async function signOut() {
-    await cognitoSignOut();
+  // ============================================================
+  // SIGN OUT
+  // ============================================================
 
-    setLoggedIn(false);
-    setUsername("");
-    setEmail("");
+  async function signOut() {
+    try {
+      await cognitoSignOut();
+    } finally {
+      setLoggedIn(false);
+      setUsername("");
+      setEmail("");
+      setShowInactivityWarning(false);
+    }
   }
+
+  // ============================================================
+  // PROFILE
+  // ============================================================
 
   function updateProfile(
     nextName: string,
@@ -99,6 +122,101 @@ export function MockAuthProvider({
   function activatePro() {
     setPro(true);
   }
+
+  // ============================================================
+  // INACTIVITY AUTO-LOGOUT
+  //
+  // 30 minutes without activity:
+  // → Show warning
+  //
+  // Additional 3 minutes without activity:
+  // → Automatically sign out
+  //
+  // Any activity during the warning:
+  // → Cancel warning
+  // → Restart 30-minute timer
+  // ============================================================
+
+  useEffect(() => {
+    if (!loggedIn) {
+      setShowInactivityWarning(false);
+      return;
+    }
+
+    const WARNING_TIME = 30 * 60 * 1000; // 30 minutes
+    const LOGOUT_TIME = 3 * 60 * 1000; // 3 additional minutes
+
+    let warningTimer: ReturnType<typeof setTimeout>;
+    let logoutTimer: ReturnType<typeof setTimeout>;
+
+    // Automatically sign the user out
+    const logoutDueToInactivity = async () => {
+      try {
+        await cognitoSignOut();
+      } catch (error) {
+        console.error(
+          "Automatic logout failed:",
+          error
+        );
+      } finally {
+        setLoggedIn(false);
+        setUsername("");
+        setEmail("");
+        setShowInactivityWarning(false);
+      }
+    };
+
+    // Start/restart inactivity timers
+    const resetTimers = () => {
+      clearTimeout(warningTimer);
+      clearTimeout(logoutTimer);
+
+      setShowInactivityWarning(false);
+
+      // Show warning after 30 minutes
+      warningTimer = setTimeout(() => {
+        setShowInactivityWarning(true);
+
+        // Sign out after another 3 minutes
+        logoutTimer = setTimeout(() => {
+          logoutDueToInactivity();
+        }, LOGOUT_TIME);
+      }, WARNING_TIME);
+    };
+
+    // Any user activity resets the timer
+    const handleActivity = () => {
+      resetTimers();
+    };
+
+    const events = [
+      "mousemove",
+      "keydown",
+      "click",
+      "scroll",
+      "touchstart",
+    ];
+
+    events.forEach((event) => {
+      window.addEventListener(event, handleActivity);
+    });
+
+    // Start the initial timer
+    resetTimers();
+
+    return () => {
+      clearTimeout(warningTimer);
+      clearTimeout(logoutTimer);
+
+      events.forEach((event) => {
+        window.removeEventListener(event, handleActivity);
+      });
+    };
+  }, [loggedIn]);
+
+  // ============================================================
+  // TEST STUDYMATE API
+  // ============================================================
 
   async function testStudyMateApi() {
     try {
@@ -128,10 +246,13 @@ export function MockAuthProvider({
 
       const data = await response.json();
 
-      console.log("StudyMate upload URL response:", {
-        status: response.status,
-        data,
-      });
+      console.log(
+        "StudyMate upload URL response:",
+        {
+          status: response.status,
+          data,
+        }
+      );
     } catch (error) {
       console.error(
         "StudyMate upload URL test failed:",
@@ -140,6 +261,10 @@ export function MockAuthProvider({
     }
   }
 
+  // ============================================================
+  // EXPOSE API TEST TO BROWSER CONSOLE
+  // ============================================================
+
   if (typeof window !== "undefined") {
     (
       window as Window & {
@@ -147,6 +272,10 @@ export function MockAuthProvider({
       }
     ).testStudyMateApi = testStudyMateApi;
   }
+
+  // ============================================================
+  // AUTH STATE
+  // ============================================================
 
   const state: AuthState = {
     loggedIn,
@@ -162,22 +291,110 @@ export function MockAuthProvider({
     activatePro,
   };
 
+  // ============================================================
+  // UI
+  // ============================================================
+
   return (
     <AuthContext.Provider value={state}>
       {children}
+
+      {/* ======================================================
+          INACTIVITY WARNING
+          ====================================================== */}
+
+      {showInactivityWarning && loggedIn && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "20px",
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "420px",
+              backgroundColor: "#ffffff",
+              borderRadius: "18px",
+              padding: "32px",
+              textAlign: "center",
+              boxShadow:
+                "0 20px 50px rgba(0, 0, 0, 0.2)",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "42px",
+                marginBottom: "12px",
+              }}
+            >
+              🌱
+            </div>
+
+            <h2
+              style={{
+                margin: "0 0 12px",
+                fontSize: "24px",
+                fontWeight: 700,
+              }}
+            >
+              Taking a little break?
+            </h2>
+
+            <p
+              style={{
+                margin: "0",
+                color: "#666666",
+                lineHeight: 1.6,
+              }}
+            >
+              You've been inactive for a while.
+              We'll sign you out soon to keep your
+              account secure.
+            </p>
+
+            <p
+              style={{
+                margin: "16px 0 0",
+                color: "#666666",
+                lineHeight: 1.6,
+              }}
+            >
+              Move your mouse or press any key to
+              stay signed in.
+            </p>
+          </div>
+        </div>
+      )}
     </AuthContext.Provider>
   );
 }
+
+// ============================================================
+// AUTH HOOK
+// ============================================================
 
 export function useMockAuth() {
   const context = useContext(AuthContext);
 
   if (!context) {
-    throw new Error("MockAuthProvider is required");
+    throw new Error(
+      "MockAuthProvider is required"
+    );
   }
 
   return context;
 }
+
+// ============================================================
+// AUTH GATE
+// ============================================================
 
 export function AuthGate({
   children,
@@ -194,7 +411,12 @@ export function AuthGate({
         `/login?next=${encodeURIComponent(pathname)}`
       );
     }
-  }, [loading, loggedIn, pathname, router]);
+  }, [
+    loading,
+    loggedIn,
+    pathname,
+    router,
+  ]);
 
   if (loading || !loggedIn) {
     return null;

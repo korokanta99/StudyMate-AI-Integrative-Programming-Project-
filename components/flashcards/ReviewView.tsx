@@ -51,8 +51,8 @@ export default function ReviewView() {
   async function getToken() {
     const session = await fetchAuthSession();
 
-    const token =
-      session.tokens?.accessToken?.toString();
+    // Use ID token to match the working protected API requests.
+    const token = session.tokens?.idToken?.toString();
 
     if (!token) {
       throw new Error(

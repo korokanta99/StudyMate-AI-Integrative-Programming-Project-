@@ -566,10 +566,19 @@ export default function MaterialsView() {
         );
       }
 
+      // The API returns deckId at the top level.
+      // Keep the nested fallback for compatibility with older responses.
       const deckId =
-        data.deck?.deckId;
+        data?.deckId ??
+        data?.deck?.deckId ??
+        data?.result?.deckId;
 
       if (!deckId) {
+        console.error(
+          "Flashcard generation response did not contain a deckId:",
+          data
+        );
+
         throw new Error(
           "Flashcard generation succeeded, but no deck ID was returned."
         );

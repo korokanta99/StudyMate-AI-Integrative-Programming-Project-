@@ -57,7 +57,7 @@ export default function QuizView() {
   const router = useRouter();
 
   const deckId =
-    String(params.deckId || "");
+    String(params.deckId ?? "");
 
   const storageKey =
     `studymate_quiz_${deckId}`;
@@ -272,7 +272,7 @@ export default function QuizView() {
     ).length;
 
   const progressText =
-    `${currentIndex + 1} of ${totalQuestions}`;
+    `${Math.min(currentIndex + 1, Math.max(totalQuestions, 1))} of ${totalQuestions}`;
 
   const isLastQuestion =
     currentIndex ===
@@ -387,10 +387,12 @@ export default function QuizView() {
       const session =
         await fetchAuthSession();
 
-      const accessToken =
-        session.tokens?.accessToken?.toString();
+      // Use the Cognito ID token, matching the token used successfully
+      // by Header.tsx for the protected API requests.
+      const idToken =
+        session.tokens?.idToken?.toString();
 
-      if (!accessToken) {
+      if (!idToken) {
         throw new Error(
           "Your session has expired. Please log in again."
         );
@@ -426,7 +428,7 @@ export default function QuizView() {
 
             headers: {
               Authorization:
-                `Bearer ${accessToken}`,
+                `Bearer ${idToken}`,
 
               "Content-Type":
                 "application/json",
@@ -453,13 +455,32 @@ export default function QuizView() {
           }
         );
 
-      const data =
-        await response.json();
+      const responseText = await response.text();
+
+      let data: any = {};
+
+      try {
+        data = responseText
+          ? JSON.parse(responseText)
+          : {};
+      } catch {
+        data = {
+          message:
+            responseText ||
+            "The server returned an invalid response.",
+        };
+      }
 
       if (!response.ok) {
         throw new Error(
           data?.message ||
             "Failed to submit quiz."
+        );
+      }
+
+      if (!data?.result) {
+        throw new Error(
+          "Quiz submitted, but no result was returned by the server."
         );
       }
 
