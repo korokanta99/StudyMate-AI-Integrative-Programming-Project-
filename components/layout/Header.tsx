@@ -576,6 +576,14 @@ export default function Header() {
         {/* Right-side controls */}
         <div className="ml-auto flex items-center gap-3">
 
+          {/* Admin */}
+          <Link
+            href="/admin"
+            className="shrink-0 rounded-full border border-[#dfe8d9] px-3 py-2 text-sm font-semibold text-[#468432] transition hover:bg-[#f5f9f1]"
+          >
+            Admin
+          </Link>
+
           {/* Streak */}
           <div className="flex items-center gap-1.5 rounded-full bg-[#eae8e2] px-3 py-2 text-sm font-semibold text-[#717a6b]">
             <span className="text-base">
