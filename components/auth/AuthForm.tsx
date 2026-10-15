@@ -133,7 +133,7 @@ export default function AuthForm({
     <main className="grid min-h-screen place-items-center bg-[#fbf9f3] px-4">
       <form
         onSubmit={submit}
-        className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-xl"
+        className="w-full max-w-md rounded-2xl bg-white p-8 text-center text-[#1b1c19] shadow-xl"
       >
         {/* Branding */}
         <div className="text-3xl font-bold text-[#2d6a1b]">
