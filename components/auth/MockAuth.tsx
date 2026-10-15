@@ -76,10 +76,25 @@ export function MockAuthProvider({
   // ============================================================
 
   async function signIn(identifier: string, password: string) {
-    const result = await cognitoSignIn({
-      username: identifier,
-      password,
-    });
+    const credentials = { username: identifier, password };
+
+    let result;
+
+    try {
+      result = await cognitoSignIn(credentials);
+    } catch (error) {
+      // A leftover session in browser storage blocks a new sign-in.
+      // Clear it and retry with the credentials just entered.
+      if (
+        !(error instanceof Error) ||
+        error.name !== "UserAlreadyAuthenticatedException"
+      ) {
+        throw error;
+      }
+
+      await cognitoSignOut();
+      result = await cognitoSignIn(credentials);
+    }
 
     if (result.isSignedIn) {
       const user = await getCurrentUser();

@@ -8,6 +8,14 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
+import {
+  DEV_ADMIN_EMAIL,
+  DEV_ADMIN_ENABLED,
+  DEV_ADMIN_PASSWORD,
+  DEV_ADMIN_TOKEN,
+  devAdminResponse,
+} from "./devAdminData";
+
 export const ADMIN_API_URL =
   "https://8auzzcojhh.execute-api.ap-southeast-1.amazonaws.com";
 
@@ -56,6 +64,20 @@ export function AdminAuthProvider({
   }, []);
 
   async function signIn(identifier: string, password: string) {
+    // Local dev only: fake admin that skips the backend
+    if (
+      DEV_ADMIN_ENABLED &&
+      identifier === DEV_ADMIN_EMAIL &&
+      password === DEV_ADMIN_PASSWORD
+    ) {
+      localStorage.setItem(TOKEN_KEY, DEV_ADMIN_TOKEN);
+      localStorage.setItem(EMAIL_KEY, identifier);
+
+      setLoggedIn(true);
+      setEmail(identifier);
+      return;
+    }
+
     const response = await fetch(`${ADMIN_API_URL}/admin/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -157,6 +179,10 @@ export async function adminFetch(
   init?: RequestInit
 ) {
   const token = getAdminToken();
+
+  if (DEV_ADMIN_ENABLED && token === DEV_ADMIN_TOKEN) {
+    return devAdminResponse(path, init);
+  }
 
   const response = await fetch(`${ADMIN_API_URL}${path}`, {
     ...init,
